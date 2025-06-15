@@ -1,11 +1,30 @@
+#ifndef LOGGER_H
+#define LOGGER_H
+
+#include <string>
+#include <iostream>
+#include <fstream>
+#include <chrono>
+#include <iomanip>
+
 class Logger {
 public:
-    // Logs an informational message
-    void logInfo(const std::string& message);
+    enum LogLevel {
+        INFO,
+        WARNING,
+        ERROR
+    };
 
-    // Logs an error message
-    void logError(const std::string& message);
+    Logger(const std::string& filename);
+    ~Logger();
 
-    // Logs a warning message
-    void logWarning(const std::string& message);
+    void log(const std::string& message, LogLevel level = INFO);
+
+private:
+    std::ofstream logFile;
+
+    std::string getCurrentTime();
+    std::string logLevelToString(LogLevel level);
 };
+
+#endif // LOGGER_H

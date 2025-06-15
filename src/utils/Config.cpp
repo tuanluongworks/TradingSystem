@@ -1,30 +1,31 @@
 #include "Config.h"
 #include <fstream>
 #include <iostream>
-#include <string>
+#include <nlohmann/json.hpp>
 
-Config::Config(const std::string& configFilePath) : configFilePath(configFilePath) {
-    loadConfig();
+using json = nlohmann::json;
+
+Config::Config(const std::string& configFilePath) {
+    loadConfig(configFilePath);
 }
 
-void Config::loadConfig() {
+void Config::loadConfig(const std::string& configFilePath) {
     std::ifstream configFile(configFilePath);
     if (!configFile.is_open()) {
-        std::cerr << "Could not open the config file: " << configFilePath << std::endl;
+        std::cerr << "Could not open the configuration file: " << configFilePath << std::endl;
         return;
     }
 
-    std::string line;
-    while (std::getline(configFile, line)) {
-        // Process each line of the config file
-        // For example, you could parse key-value pairs here
+    try {
+        configFile >> configData;
+    } catch (const json::parse_error& e) {
+        std::cerr << "Error parsing the configuration file: " << e.what() << std::endl;
     }
-
-    configFile.close();
 }
 
-std::string Config::getSetting(const std::string& key) const {
-    // Return the value associated with the given key
-    // This is a placeholder implementation
+std::string Config::getValue(const std::string& key) const {
+    if (configData.contains(key)) {
+        return configData[key].get<std::string>();
+    }
     return "";
 }

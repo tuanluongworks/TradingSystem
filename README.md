@@ -1,90 +1,65 @@
-# Trading System
+# Trading System Backend
 
-## Overview
-The Trading System is a C++ application designed to facilitate trading operations, including order management, portfolio tracking, and strategy implementation. This project serves as a demonstration of trading application development and showcases various components involved in building a trading system.
+This project is a C++ web backend for a trading system designed to support cross-platform development on Windows and Linux. It provides functionalities for managing trading orders, user authentication, and retrieving market data.
 
 ## Project Structure
+
 ```
 TradingSystem
 ├── src
-│   ├── main.cpp
-│   ├── core
-│   │   ├── TradingEngine.cpp
-│   │   ├── TradingEngine.h
-│   │   ├── OrderManager.cpp
-│   │   ├── OrderManager.h
-│   │   ├── PortfolioManager.cpp
-│   │   └── PortfolioManager.h
-│   ├── models
-│   │   ├── Order.h
-│   │   ├── Trade.h
-│   │   ├── Portfolio.h
-│   │   └── MarketData.h
-│   ├── strategies
-│   │   ├── Strategy.h
-│   │   ├── MovingAverageStrategy.cpp
-│   │   └── MovingAverageStrategy.h
-│   ├── data
-│   │   ├── DataProvider.h
-│   │   ├── MarketDataProvider.cpp
-│   │   └── MarketDataProvider.h
-│   └── utils
-│       ├── Logger.cpp
-│       ├── Logger.h
-│       ├── Config.cpp
-│       └── Config.h
-├── tests
-│   ├── test_main.cpp
-│   ├── TradingEngineTest.cpp
-│   └── OrderManagerTest.cpp
-├── CMakeLists.txt
-├── .gitignore
-└── README.md
+│   ├── main.cpp                # Entry point of the application
+│   ├── server                   # HTTP server implementation
+│   ├── trading                  # Trading-related functionalities
+│   ├── api                      # API controllers for trading and authentication
+│   ├── database                 # Database management and models
+│   ├── utils                    # Utility classes for logging and configuration
+│   └── common                   # Common types and constants
+├── tests                        # Unit tests for the application
+├── third_party                  # Third-party libraries
+├── scripts                      # Build and test scripts
+├── config                       # Configuration files for different environments
+├── CMakeLists.txt              # CMake configuration for building the project
+├── .gitignore                   # Files to ignore in version control
+└── README.md                    # Project documentation
 ```
 
-## Features
-- **Trading Engine**: Manages the overall trading process, including order execution and strategy application.
-- **Order Management**: Handles order creation, modification, and cancellation.
-- **Portfolio Management**: Manages user portfolios, including asset allocation and performance tracking.
-- **Market Data Handling**: Retrieves and processes market data from external sources.
-- **Logging**: Provides logging functionality for tracking application behavior and errors.
-- **Config Management**: Handles configuration settings for the application.
+## Setup Instructions
 
-## Getting Started
-
-### Prerequisites
-- C++ compiler (e.g., g++, clang++)
-- CMake (for building the project)
-
-### Installation
-1. Clone the repository:
-   ```
+1. **Clone the Repository**
+   ```bash
    git clone <repository-url>
    cd TradingSystem
    ```
 
-2. Build the project using CMake:
-   ```
-   mkdir build
-   cd build
-   cmake ..
-   make
-   ```
+2. **Build the Project**
+   - For Linux:
+     ```bash
+     ./scripts/build.sh
+     ```
+   - For Windows:
+     ```bash
+     ./scripts/build.bat
+     ```
 
-### Usage
-- Run the application:
-   ```
+3. **Run the Application**
+   After building, you can run the application using:
+   ```bash
    ./TradingSystem
    ```
 
-### Running Tests
-- To run the tests, navigate to the `tests` directory and execute:
+4. **Run Tests**
+   To run the test suite, execute:
+   ```bash
+   ./scripts/run_tests.sh
    ```
-   ./test_main
-   ```
+
+## Features
+
+- **Order Management**: Create and cancel trading orders.
+- **User Authentication**: Manage user login and registration.
+- **Market Data Retrieval**: Fetch and process market prices.
+- **Logging**: Comprehensive logging for debugging and monitoring.
 
 ## Contributing
-Contributions are welcome! Please feel free to submit a pull request or open an issue for any suggestions or improvements.
 
-## License
-This project is licensed under the MIT License. See the LICENSE file for more details.
+Contributions are welcome! Please open an issue or submit a pull request for any enhancements or bug fixes.

@@ -1,10 +1,11 @@
 #include "Logger.h"
 #include <iostream>
 #include <fstream>
-#include <string>
 #include <ctime>
+#include <sstream>
 
-Logger::Logger(const std::string& filename) : logFile(filename, std::ios::app) {
+Logger::Logger(const std::string& filename) {
+    logFile.open(filename, std::ios::app);
     if (!logFile.is_open()) {
         std::cerr << "Failed to open log file: " << filename << std::endl;
     }
@@ -16,21 +17,16 @@ Logger::~Logger() {
     }
 }
 
-void Logger::logInfo(const std::string& message) {
+void Logger::log(const std::string& message) {
     if (logFile.is_open()) {
-        logFile << getCurrentTime() << " [INFO]: " << message << std::endl;
-    }
-}
-
-void Logger::logError(const std::string& message) {
-    if (logFile.is_open()) {
-        logFile << getCurrentTime() << " [ERROR]: " << message << std::endl;
+        logFile << getCurrentTime() << " - " << message << std::endl;
     }
 }
 
 std::string Logger::getCurrentTime() {
     std::time_t now = std::time(nullptr);
-    char buf[100];
-    std::strftime(buf, sizeof(buf), "%Y-%m-%d %H:%M:%S", std::localtime(&now));
-    return buf;
+    std::tm* localTime = std::localtime(&now);
+    std::ostringstream oss;
+    oss << std::put_time(localTime, "%Y-%m-%d %H:%M:%S");
+    return oss.str();
 }

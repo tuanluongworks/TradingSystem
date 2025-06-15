@@ -1,21 +1,17 @@
 #include <iostream>
-#include "core/TradingEngine.h"
+#include "server/HttpServer.h"
 
 int main() {
-    TradingEngine tradingEngine;
+    HttpServer server;
 
-    std::cout << "Initializing Trading System..." << std::endl;
-    tradingEngine.startTrading();
+    // Start the server
+    server.start();
 
-    // Main trading loop
-    while (true) {
-        // Here you would typically fetch market data, execute strategies, etc.
-        // For demonstration purposes, we'll just break the loop after one iteration.
-        break;
-    }
+    std::cout << "Server is running. Press Enter to stop..." << std::endl;
+    std::cin.get();
 
-    tradingEngine.stopTrading();
-    std::cout << "Trading System stopped." << std::endl;
+    // Stop the server
+    server.stop();
 
     return 0;
 }
