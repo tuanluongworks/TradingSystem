@@ -1,20 +1,34 @@
-#ifndef PORTFOLIO_H
-#define PORTFOLIO_H
-
+#pragma once
+#include "Types.h"
 #include <vector>
 #include <string>
+#include <memory>
+#include <mutex>
+
+class DatabaseManager;
 
 class Portfolio {
-public:
-    Portfolio();
-    ~Portfolio();
-
-    void addAsset(const std::string& asset);
-    void removeAsset(const std::string& asset);
-    const std::vector<std::string>& getAssets() const;
-
 private:
-    std::vector<std::string> assets;
-};
+    std::vector<Asset> assets;
+    double totalValue;
+    std::string userId;
+    std::shared_ptr<DatabaseManager> dbManager;
+    mutable std::mutex portfolioMutex;
 
-#endif // PORTFOLIO_H
+public:
+    explicit Portfolio(const std::string& userId, std::shared_ptr<DatabaseManager> db = nullptr);
+    ~Portfolio();
+    
+    void addAsset(const Asset& asset);
+    bool removeAsset(const std::string& symbol);
+    const std::vector<Asset>& getAssets() const;
+    double getTotalValue() const;
+    void updateAssetPrice(const std::string& symbol, double newPrice);
+    Asset getAsset(const std::string& symbol) const;
+    bool hasAsset(const std::string& symbol) const;
+    void loadFromDatabase();
+    
+private:
+    void calculateTotalValue();
+    void saveToDatabase();
+};

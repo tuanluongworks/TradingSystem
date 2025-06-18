@@ -1,21 +1,125 @@
 #include "Portfolio.h"
+#include "DatabaseManager.h"
+#include <algorithm>
+#include <stdexcept>
+#include <iostream>
 
-Portfolio::Portfolio() {
-    // Constructor implementation
+Portfolio::Portfolio(const std::string& userId, std::shared_ptr<DatabaseManager> db)
+    : totalValue(0.0), userId(userId), dbManager(db) {
+    if (dbManager && dbManager->isConnected()) {
+        loadFromDatabase();
+    }
 }
+
+Portfolio::~Portfolio() = default;
 
 void Portfolio::addAsset(const Asset& asset) {
-    // Add asset to the portfolio
-    assets.push_back(asset);
+    std::lock_guard<std::mutex> lock(portfolioMutex);
+    
+    auto it = std::find_if(assets.begin(), assets.end(),
+        [&asset](const Asset& existing) { return existing.symbol == asset.symbol; });
+    
+    if (it != assets.end()) {
+        // Update existing asset
+        double totalCost = (it->quantity * it->averageCost) + (asset.quantity * asset.currentPrice);
+        double totalQuantity = it->quantity + asset.quantity;
+        
+        it->quantity = totalQuantity;
+        it->averageCost = totalCost / totalQuantity;
+        it->currentPrice = asset.currentPrice;
+    } else {
+        // Add new asset
+        assets.push_back(asset);
+    }
+    
+    calculateTotalValue();
+    saveToDatabase();
+    
+    std::cout << "Asset added to portfolio: " << asset.symbol 
+              << " (Quantity: " << asset.quantity << ")\n";
 }
 
-void Portfolio::removeAsset(const std::string& assetId) {
-    // Remove asset from the portfolio by asset ID
-    assets.erase(std::remove_if(assets.begin(), assets.end(),
-        [&assetId](const Asset& asset) { return asset.getId() == assetId; }), assets.end());
+bool Portfolio::removeAsset(const std::string& symbol) {
+    std::lock_guard<std::mutex> lock(portfolioMutex);
+    
+    auto it = std::find_if(assets.begin(), assets.end(),
+        [&symbol](const Asset& asset) { return asset.symbol == symbol; });
+    
+    if (it != assets.end()) {
+        assets.erase(it);
+        calculateTotalValue();
+        saveToDatabase();
+        
+        std::cout << "Asset removed from portfolio: " << symbol << "\n";
+        return true;
+    }
+    
+    return false;
 }
 
-std::vector<Asset> Portfolio::getAssets() const {
-    // Return the list of assets in the portfolio
+const std::vector<Asset>& Portfolio::getAssets() const {
+    std::lock_guard<std::mutex> lock(portfolioMutex);
     return assets;
+}
+
+double Portfolio::getTotalValue() const {
+    std::lock_guard<std::mutex> lock(portfolioMutex);
+    return totalValue;
+}
+
+void Portfolio::updateAssetPrice(const std::string& symbol, double newPrice) {
+    std::lock_guard<std::mutex> lock(portfolioMutex);
+    
+    auto it = std::find_if(assets.begin(), assets.end(),
+        [&symbol](Asset& asset) { return asset.symbol == symbol; });
+    
+    if (it != assets.end()) {
+        it->currentPrice = newPrice;
+        calculateTotalValue();
+        
+        std::cout << "Asset price updated: " << symbol << " -> $" << newPrice << "\n";
+    }
+}
+
+Asset Portfolio::getAsset(const std::string& symbol) const {
+    std::lock_guard<std::mutex> lock(portfolioMutex);
+    
+    auto it = std::find_if(assets.begin(), assets.end(),
+        [&symbol](const Asset& asset) { return asset.symbol == symbol; });
+    
+    if (it != assets.end()) {
+        return *it;
+    }
+    
+    throw std::runtime_error("Asset not found: " + symbol);
+}
+
+bool Portfolio::hasAsset(const std::string& symbol) const {
+    std::lock_guard<std::mutex> lock(portfolioMutex);
+    
+    return std::any_of(assets.begin(), assets.end(),
+        [&symbol](const Asset& asset) { return asset.symbol == symbol; });
+}
+
+void Portfolio::loadFromDatabase() {
+    if (dbManager && dbManager->isConnected()) {
+        assets = dbManager->getAssetsByUserId(userId);
+        calculateTotalValue();
+        std::cout << "Portfolio loaded from database for user: " << userId << "\n";
+    }
+}
+
+void Portfolio::calculateTotalValue() {
+    totalValue = 0.0;
+    for (const auto& asset : assets) {
+        totalValue += asset.quantity * asset.currentPrice;
+    }
+}
+
+void Portfolio::saveToDatabase() {
+    if (dbManager && dbManager->isConnected()) {
+        for (const auto& asset : assets) {
+            dbManager->saveAsset(userId, asset);
+        }
+    }
 }

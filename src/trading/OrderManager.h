@@ -1,33 +1,30 @@
-#ifndef ORDER_MANAGER_H
-#define ORDER_MANAGER_H
-
-#include <string>
+#pragma once
+#include "Types.h"
 #include <vector>
+#include <memory>
+#include <mutex>
 
-class Order {
-public:
-    Order(int id, const std::string& symbol, int quantity, double price);
-    int getId() const;
-    std::string getSymbol() const;
-    int getQuantity() const;
-    double getPrice() const;
-
-private:
-    int id;
-    std::string symbol;
-    int quantity;
-    double price;
-};
+class DatabaseManager;
 
 class OrderManager {
-public:
-    OrderManager();
-    void createOrder(const std::string& symbol, int quantity, double price);
-    void cancelOrder(int orderId);
-    std::vector<Order> getOrders() const;
-
 private:
-    std::vector<Order> orders;
-};
+    std::vector<Order> activeOrders;
+    std::shared_ptr<DatabaseManager> dbManager;
+    mutable std::mutex ordersMutex;
 
-#endif // ORDER_MANAGER_H
+public:
+    explicit OrderManager(std::shared_ptr<DatabaseManager> db);
+    ~OrderManager();
+    
+    std::string createOrder(const Order& order);
+    bool cancelOrder(const std::string& orderId);
+    bool updateOrder(const std::string& orderId, const Order& updatedOrder);
+    std::vector<Order> getActiveOrders() const;
+    std::vector<Order> getOrdersByUserId(const std::string& userId) const;
+    Order getOrderById(const std::string& orderId) const;
+    bool executeOrder(const std::string& orderId);
+    
+private:
+    std::string generateOrderId();
+    bool validateOrder(const Order& order) const;
+};
