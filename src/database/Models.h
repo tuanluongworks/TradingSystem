@@ -1,53 +1,31 @@
-#ifndef MODELS_H
-#define MODELS_H
-
+#pragma once
+#include "Types.h"
 #include <string>
 #include <vector>
 
-class User {
+class DatabaseModels {
 public:
-    User(int id, const std::string& name, const std::string& email);
+    // Order table operations
+    static std::string createOrdersTable();
+    static std::string insertOrder();
+    static std::string selectOrderById();
+    static std::string selectOrdersByUserId();
+    static std::string updateOrderStatus();
     
-    int getId() const;
-    std::string getName() const;
-    std::string getEmail() const;
-
-private:
-    int id;
-    std::string name;
-    std::string email;
-};
-
-class Asset {
-public:
-    Asset(int id, const std::string& symbol, double quantity);
+    // User table operations
+    static std::string createUsersTable();
+    static std::string insertUser();
+    static std::string selectUserById();
+    static std::string selectUserByUsername();
     
-    int getId() const;
-    std::string getSymbol() const;
-    double getQuantity() const;
-
-private:
-    int id;
-    std::string symbol;
-    double quantity;
-};
-
-class Order {
-public:
-    Order(int id, int userId, const std::string& assetSymbol, double quantity, const std::string& orderType);
+    // Portfolio table operations
+    static std::string createPortfolioTable();
+    static std::string insertAsset();
+    static std::string selectAssetsByUserId();
+    static std::string updateAssetQuantity();
     
-    int getId() const;
-    int getUserId() const;
-    std::string getAssetSymbol() const;
-    double getQuantity() const;
-    std::string getOrderType() const;
-
-private:
-    int id;
-    int userId;
-    std::string assetSymbol;
-    double quantity;
-    std::string orderType;
+    // Market data table operations
+    static std::string createMarketDataTable();
+    static std::string insertMarketData();
+    static std::string selectLatestMarketData();
 };
-
-#endif // MODELS_H
