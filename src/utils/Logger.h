@@ -12,7 +12,7 @@ public:
     enum LogLevel {
         INFO,
         WARNING,
-        ERROR
+        LOG_ERROR  // Renamed to avoid Windows macro conflict
     };
 
     Logger(const std::string& filename);

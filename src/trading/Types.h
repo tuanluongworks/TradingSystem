@@ -17,10 +17,10 @@ enum class OrderStatus {
 };
 
 enum class LogLevel {
-    INFO,
-    WARNING,
-    ERROR,
-    DEBUG
+    LOG_INFO,
+    LOG_WARNING,
+    LOG_ERROR,
+    LOG_DEBUG
 };
 
 struct Order {

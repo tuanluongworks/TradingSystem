@@ -33,6 +33,9 @@ file(GLOB_RECURSE LIB_SOURCES
     src/utils/*.cpp
 )
 
+# Remove any test files that might have been picked up
+list(FILTER LIB_SOURCES EXCLUDE REGEX ".*test.*")
+
 # Create a static library for the core functionality
 add_library(TradingSystemLib STATIC ${LIB_SOURCES})
 

@@ -1,12 +1,15 @@
 cmake_minimum_required(VERSION 3.20)
 
-# Find all test source files
-file(GLOB_RECURSE TEST_SOURCES
-    test_*.cpp
-)
+# Create test executable with just the main file
+add_executable(TradingSystemTests test_main.cpp)
 
-# Create test executable
-add_executable(TradingSystemTests ${TEST_SOURCES})
+# Set include directories for tests
+target_include_directories(TradingSystemTests PRIVATE
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/src/common
+    ${CMAKE_SOURCE_DIR}/src/trading
+    ${CMAKE_SOURCE_DIR}/src/database
+)
 
 # Link against the library (not the executable)
 target_link_libraries(TradingSystemTests TradingSystemLib)

@@ -1,46 +1,89 @@
-#include <gtest/gtest.h>
-#include "OrderManager.h"
+#include "../../src/trading/OrderManager.h"
+#include "../../src/database/DatabaseManager.h"
+#include <memory>
 
-class OrderManagerTest : public ::testing::Test {
-protected:
-    OrderManager* orderManager;
-
-    void SetUp() override {
-        orderManager = new OrderManager();
-    }
-
-    void TearDown() override {
-        delete orderManager;
-    }
-};
-
-TEST_F(OrderManagerTest, CreateOrder) {
-    // Arrange
+TEST(OrderManager_CreateOrder) {
+    auto dbManager = std::make_shared<DatabaseManager>();
+    OrderManager orderManager(dbManager);
+    
     Order order;
-    order.id = 1;
     order.symbol = "AAPL";
+    order.type = OrderType::BUY;
     order.quantity = 10;
     order.price = 150.0;
-
-    // Act
-    bool result = orderManager->createOrder(order);
-
-    // Assert
-    EXPECT_TRUE(result);
+    order.userId = "test_user";
+    
+    std::string orderId = orderManager.createOrder(order);
+    
+    ASSERT_TRUE(!orderId.empty());
+    ASSERT_TRUE(orderId.substr(0, 3) == "ORD");
+    
+    return true;
 }
 
-TEST_F(OrderManagerTest, CancelOrder) {
-    // Arrange
+TEST(OrderManager_CancelOrder) {
+    auto dbManager = std::make_shared<DatabaseManager>();
+    OrderManager orderManager(dbManager);
+    
     Order order;
-    order.id = 1;
     order.symbol = "AAPL";
+    order.type = OrderType::BUY;
     order.quantity = 10;
     order.price = 150.0;
-    orderManager->createOrder(order);
+    order.userId = "test_user";
+    
+    std::string orderId = orderManager.createOrder(order);
+    ASSERT_TRUE(!orderId.empty());
+    
+    bool result = orderManager.cancelOrder(orderId);
+    ASSERT_TRUE(result);
+    
+    // Try to cancel again - should fail
+    bool result2 = orderManager.cancelOrder(orderId);
+    ASSERT_FALSE(result2);
+    
+    return true;
+}
 
-    // Act
-    bool result = orderManager->cancelOrder(order.id);
+TEST(OrderManager_GetOrderById) {
+    auto dbManager = std::make_shared<DatabaseManager>();
+    OrderManager orderManager(dbManager);
+    
+    Order order;
+    order.symbol = "GOOGL";
+    order.type = OrderType::SELL;
+    order.quantity = 5;
+    order.price = 2800.0;
+    order.userId = "test_user";
+    
+    std::string orderId = orderManager.createOrder(order);
+    
+    try {
+        Order retrievedOrder = orderManager.getOrderById(orderId);
+        ASSERT_EQ(retrievedOrder.id, orderId);
+        ASSERT_EQ(retrievedOrder.symbol, order.symbol);
+        ASSERT_EQ(retrievedOrder.quantity, order.quantity);
+        return true;
+    } catch (...) {
+        return false;
+    }
+}
 
-    // Assert
-    EXPECT_TRUE(result);
+TEST(OrderManager_InvalidOrder) {
+    auto dbManager = std::make_shared<DatabaseManager>();
+    OrderManager orderManager(dbManager);
+    
+    Order order;
+    order.symbol = ""; // Invalid - empty symbol
+    order.type = OrderType::BUY;
+    order.quantity = 10;
+    order.price = 150.0;
+    order.userId = "test_user";
+    
+    try {
+        orderManager.createOrder(order);
+        return false; // Should have thrown
+    } catch (const std::invalid_argument&) {
+        return true; // Expected exception
+    }
 }

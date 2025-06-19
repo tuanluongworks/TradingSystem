@@ -17,9 +17,9 @@ Logger::~Logger() {
     }
 }
 
-void Logger::log(const std::string& message) {
+void Logger::log(const std::string& message, LogLevel level) {
     if (logFile.is_open()) {
-        logFile << getCurrentTime() << " - " << message << std::endl;
+        logFile << getCurrentTime() << " [" << logLevelToString(level) << "] - " << message << std::endl;
     }
 }
 
@@ -29,4 +29,13 @@ std::string Logger::getCurrentTime() {
     std::ostringstream oss;
     oss << std::put_time(localTime, "%Y-%m-%d %H:%M:%S");
     return oss.str();
+}
+
+std::string Logger::logLevelToString(LogLevel level) {
+    switch (level) {
+        case INFO: return "INFO";
+        case WARNING: return "WARNING";
+        case LOG_ERROR: return "ERROR";
+        default: return "UNKNOWN";
+    }
 }
