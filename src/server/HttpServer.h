@@ -32,6 +32,7 @@ struct HttpRequest {
     std::string version;
     std::map<std::string, std::string> headers;
     std::string body;
+    std::map<std::string, std::string> pathParams;
 };
 
 struct HttpResponse {

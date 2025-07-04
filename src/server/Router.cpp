@@ -24,6 +24,9 @@ void Router::del(const std::string& path, Handler handler) {
 }
 
 void Router::addRoute(const std::string& method, const std::string& path, Handler handler) {
+    // Extract parameter names from the path
+    std::vector<std::string> paramNames = extractParamNames(path);
+    
     // Convert path to regex pattern
     std::string pattern = path;
     
@@ -36,7 +39,21 @@ void Router::addRoute(const std::string& method, const std::string& path, Handle
     // Add start and end anchors
     pattern = "^" + pattern + "$";
     
-    routes.push_back({method, std::regex(pattern), handler});
+    routes.push_back({method, path, std::regex(pattern), paramNames, handler});
+}
+
+std::vector<std::string> Router::extractParamNames(const std::string& path) {
+    std::vector<std::string> paramNames;
+    std::regex paramRegex(R"(:(\w+))");
+    std::smatch match;
+    std::string searchPath = path;
+    
+    while (std::regex_search(searchPath, match, paramRegex)) {
+        paramNames.push_back(match[1].str());
+        searchPath = match.suffix();
+    }
+    
+    return paramNames;
 }
 
 HttpResponse Router::route(const HttpRequest& request) {
@@ -52,8 +69,14 @@ HttpResponse Router::route(const HttpRequest& request) {
         if (route.method == request.method) {
             std::smatch match;
             if (std::regex_match(request.path, match, route.pattern)) {
+                // Extract path parameters
+                HttpRequest modifiedRequest = request;
+                for (size_t i = 0; i < route.paramNames.size() && i + 1 < match.size(); ++i) {
+                    modifiedRequest.pathParams[route.paramNames[i]] = match[i + 1].str();
+                }
+                
                 try {
-                    return route.handler(request);
+                    return route.handler(modifiedRequest);
                 } catch (const std::exception& e) {
                     response.statusCode = 500;
                     response.statusText = "Internal Server Error";

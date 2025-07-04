@@ -1,4 +1,5 @@
 #include "AuthController.h"
+#include "../utils/JwtToken.h"
 #include <iostream>
 #include <string>
 #include <algorithm>
@@ -40,4 +41,12 @@ bool AuthController::registerUser(const std::string& username, const std::string
 void AuthController::logout(const std::string& username) {
     std::cout << "User logged out: " << username << std::endl;
     // TODO: In production, invalidate session/token
+}
+
+std::string AuthController::generateAuthToken(const std::string& userId, const std::string& username) {
+    return JwtToken::generateToken(userId, username);
+}
+
+bool AuthController::validateToken(const std::string& token) {
+    return JwtToken::validateToken(token);
 }

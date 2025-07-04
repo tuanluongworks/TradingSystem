@@ -1,9 +1,13 @@
 #include "DatabaseManager.h"
 #include "Models.h"
+#include "../utils/JsonParser.h"
 #include <fstream>
 #include <random>
 #include <sstream>
 #include <iostream>
+#include <filesystem>
+#include <vector>
+#include <map>
 
 DatabaseManager::DatabaseManager() : dbPath("trading_system.db"), connected(false) {}
 
@@ -14,8 +18,8 @@ DatabaseManager::~DatabaseManager() {
 }
 
 bool DatabaseManager::connect() {
-    // For this implementation, we'll simulate a connection
-    // In a real implementation, you would connect to SQLite or another database
+    // Create database directory if it doesn't exist
+    std::filesystem::create_directories("data");
     connected = true;
     return initializeTables();
 }
@@ -29,7 +33,17 @@ bool DatabaseManager::isConnected() const {
 }
 
 bool DatabaseManager::initializeTables() {
-    // In a real implementation, execute CREATE TABLE statements
+    // Create data files if they don't exist
+    std::ofstream ordersFile("data/orders.json", std::ios::app);
+    std::ofstream usersFile("data/users.json", std::ios::app);
+    std::ofstream assetsFile("data/assets.json", std::ios::app);
+    std::ofstream marketDataFile("data/market_data.json", std::ios::app);
+    
+    ordersFile.close();
+    usersFile.close();
+    assetsFile.close();
+    marketDataFile.close();
+    
     std::cout << "Database tables initialized successfully\n";
     return true;
 }
@@ -37,7 +51,23 @@ bool DatabaseManager::initializeTables() {
 bool DatabaseManager::saveOrder(const Order& order) {
     if (!connected) return false;
     
-    // Simulate saving order to database
+    std::ofstream file("data/orders.json", std::ios::app);
+    if (!file.is_open()) return false;
+    
+    std::map<std::string, std::string> orderData;
+    orderData["id"] = order.id;
+    orderData["symbol"] = order.symbol;
+    orderData["type"] = (order.type == OrderType::BUY) ? "BUY" : "SELL";
+    orderData["quantity"] = std::to_string(order.quantity);
+    orderData["price"] = std::to_string(order.price);
+    orderData["status"] = std::to_string(static_cast<int>(order.status));
+    orderData["userId"] = order.userId;
+    orderData["timestamp"] = std::to_string(std::chrono::duration_cast<std::chrono::seconds>(
+        order.timestamp.time_since_epoch()).count());
+    
+    file << JsonParser::createObject(orderData) << "\n";
+    file.close();
+    
     std::cout << "Order saved: " << order.id << " for symbol " << order.symbol << "\n";
     return true;
 }
@@ -45,26 +75,114 @@ bool DatabaseManager::saveOrder(const Order& order) {
 Order DatabaseManager::getOrderById(const std::string& orderId) {
     if (!connected) return Order();
     
-    // Simulate retrieving order from database
-    Order order;
-    order.id = orderId;
-    return order;
+    std::ifstream file("data/orders.json");
+    if (!file.is_open()) return Order();
+    
+    std::string line;
+    while (std::getline(file, line)) {
+        std::string id = JsonParser::extractString(line, "id");
+        if (id == orderId) {
+            Order order;
+            order.id = id;
+            order.symbol = JsonParser::extractString(line, "symbol");
+            std::string typeStr = JsonParser::extractString(line, "type");
+            order.type = (typeStr == "BUY") ? OrderType::BUY : OrderType::SELL;
+            order.quantity = JsonParser::extractNumber(line, "quantity");
+            order.price = JsonParser::extractNumber(line, "price");
+            order.status = static_cast<OrderStatus>(static_cast<int>(JsonParser::extractNumber(line, "status")));
+            order.userId = JsonParser::extractString(line, "userId");
+            
+            file.close();
+            return order;
+        }
+    }
+    
+    file.close();
+    return Order();
 }
 
 std::vector<Order> DatabaseManager::getOrdersByUserId(const std::string& userId) {
     if (!connected) return {};
     
-    // Simulate retrieving orders from database
     std::vector<Order> orders;
+    std::ifstream file("data/orders.json");
+    if (!file.is_open()) return orders;
+    
+    std::string line;
+    while (std::getline(file, line)) {
+        std::string orderUserId = JsonParser::extractString(line, "userId");
+        if (orderUserId == userId) {
+            Order order;
+            order.id = JsonParser::extractString(line, "id");
+            order.symbol = JsonParser::extractString(line, "symbol");
+            std::string typeStr = JsonParser::extractString(line, "type");
+            order.type = (typeStr == "BUY") ? OrderType::BUY : OrderType::SELL;
+            order.quantity = JsonParser::extractNumber(line, "quantity");
+            order.price = JsonParser::extractNumber(line, "price");
+            order.status = static_cast<OrderStatus>(static_cast<int>(JsonParser::extractNumber(line, "status")));
+            order.userId = orderUserId;
+            
+            orders.push_back(order);
+        }
+    }
+    
+    file.close();
     return orders;
 }
 
 bool DatabaseManager::updateOrderStatus(const std::string& orderId, OrderStatus status) {
     if (!connected) return false;
     
-    // Simulate updating order status
+    // Read all orders
+    std::vector<std::string> allOrders;
+    std::ifstream inFile("data/orders.json");
+    if (!inFile.is_open()) return false;
+    
+    std::string line;
+    bool updated = false;
+    while (std::getline(inFile, line)) {
+        std::string id = JsonParser::extractString(line, "id");
+        if (id == orderId) {
+            // Update the status in this order
+            Order order;
+            order.id = id;
+            order.symbol = JsonParser::extractString(line, "symbol");
+            std::string typeStr = JsonParser::extractString(line, "type");
+            order.type = (typeStr == "BUY") ? OrderType::BUY : OrderType::SELL;
+            order.quantity = JsonParser::extractNumber(line, "quantity");
+            order.price = JsonParser::extractNumber(line, "price");
+            order.status = status; // Update status
+            order.userId = JsonParser::extractString(line, "userId");
+            
+            std::map<std::string, std::string> orderData;
+            orderData["id"] = order.id;
+            orderData["symbol"] = order.symbol;
+            orderData["type"] = (order.type == OrderType::BUY) ? "BUY" : "SELL";
+            orderData["quantity"] = std::to_string(order.quantity);
+            orderData["price"] = std::to_string(order.price);
+            orderData["status"] = std::to_string(static_cast<int>(order.status));
+            orderData["userId"] = order.userId;
+            orderData["timestamp"] = JsonParser::extractString(line, "timestamp");
+            
+            allOrders.push_back(JsonParser::createObject(orderData));
+            updated = true;
+        } else {
+            allOrders.push_back(line);
+        }
+    }
+    inFile.close();
+    
+    if (updated) {
+        // Write back all orders
+        std::ofstream outFile("data/orders.json", std::ios::trunc);
+        for (const auto& orderLine : allOrders) {
+            outFile << orderLine << "\n";
+        }
+        outFile.close();
+    }
+    
     std::cout << "Order status updated: " << orderId << "\n";
-    return true;
+    return updated;
 }
 
 bool DatabaseManager::saveUser(const User& user) {

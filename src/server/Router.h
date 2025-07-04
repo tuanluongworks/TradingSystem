@@ -11,6 +11,9 @@
 struct HttpRequest;
 struct HttpResponse;
 
+// Extend HttpRequest to include path parameters
+struct HttpRequest;
+
 class Router {
 public:
     using Handler = std::function<HttpResponse(const HttpRequest&)>;
@@ -33,7 +36,9 @@ public:
 private:
     struct Route {
         std::string method;
+        std::string originalPath;  // Store original path pattern
         std::regex pattern;
+        std::vector<std::string> paramNames;  // Store parameter names
         Handler handler;
     };
     
@@ -43,6 +48,7 @@ private:
     void addRoute(const std::string& method, const std::string& path, Handler handler);
     HttpResponse handleNotFound();
     HttpResponse handleMethodNotAllowed();
+    std::vector<std::string> extractParamNames(const std::string& path);
 };
 
 #endif // ROUTER_H

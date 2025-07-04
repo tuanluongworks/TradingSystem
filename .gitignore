@@ -1,2 +1,78 @@
-.vs
-build
+# Build directories
+build/
+out/
+cmake-build-*/
+.vs/
+Debug/
+Release/
+x64/
+x86/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+
+# Compiled files
+*.o
+*.obj
+*.a
+*.lib
+*.so
+*.dll
+*.dylib
+*.exe
+*.pdb
+*.ilk
+*.exp
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Logs
+*.log
+logs/
+
+# Database files
+data/
+*.db
+*.sqlite
+
+# Test coverage
+*.gcov
+*.gcda
+*.gcno
+coverage/
+
+# Documentation
+docs/html/
+docs/latex/
+
+# Dependencies
+third_party/*/
+vendor/
+
+# OS files
+Thumbs.db
+.DS_Store
+
+# Temporary files
+*.tmp
+*.temp
+*.bak
+*.backup
+
+# Configuration overrides
+config/local.*
+config/*.local.*

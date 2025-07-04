@@ -11,6 +11,7 @@
 #include "database/DatabaseManager.h"
 #include "utils/Config.h"
 #include "utils/Logger.h"
+#include "utils/JsonParser.h"
 #include "common/Constants.h"
 
 // Global server pointer for signal handling
@@ -79,13 +80,22 @@ int main(int argc, char* argv[]) {
             res.headers["Content-Type"] = "application/json";
             
             try {
-                // Parse order from request body (simplified)
+                // Parse order from request body
                 Order order;
-                order.symbol = "AAPL"; // TODO: Parse from JSON
-                order.type = OrderType::BUY;
-                order.quantity = 100;
-                order.price = 150.0;
-                order.userId = "user123";
+                order.symbol = JsonParser::extractString(req.body, "symbol");
+                std::string typeStr = JsonParser::extractString(req.body, "type");
+                order.type = (typeStr == "BUY" || typeStr == "buy") ? OrderType::BUY : OrderType::SELL;
+                order.quantity = JsonParser::extractNumber(req.body, "quantity");
+                order.price = JsonParser::extractNumber(req.body, "price");
+                order.userId = "user123"; // TODO: Extract from auth token
+                
+                // Validate required fields
+                if (order.symbol.empty() || order.quantity <= 0 || order.price <= 0) {
+                    res.statusCode = 400;
+                    res.statusText = "Bad Request";
+                    res.body = R"({"error": "Invalid order parameters"})";
+                    return res;
+                }
                 
                 std::string orderId = orderManager->createOrder(order);
                 res.body = R"({"orderId": ")" + orderId + R"(", "status": "created"})";
@@ -108,10 +118,37 @@ int main(int argc, char* argv[]) {
             for (size_t i = 0; i < orders.size(); ++i) {
                 if (i > 0) res.body += ", ";
                 res.body += R"({"id": ")" + orders[i].id + R"(", "symbol": ")" + 
-                           orders[i].symbol + R"("})";
+                           orders[i].symbol + R"(", "type": ")" + 
+                           (orders[i].type == OrderType::BUY ? "BUY" : "SELL") + 
+                           R"(", "quantity": )" + std::to_string(orders[i].quantity) +
+                           R"(, "price": )" + std::to_string(orders[i].price) + "}";
             }
             
             res.body += "]}";
+            return res;
+        });
+        
+        router->del("/api/v1/orders/:orderId", [orderManager](const HttpRequest& req) {
+            HttpResponse res;
+            res.headers["Content-Type"] = "application/json";
+            
+            try {
+                std::string orderId = req.pathParams.at("orderId");
+                bool success = orderManager->cancelOrder(orderId);
+                
+                if (success) {
+                    res.body = R"({"success": true, "message": "Order cancelled successfully"})";
+                } else {
+                    res.statusCode = 404;
+                    res.statusText = "Not Found";
+                    res.body = R"({"error": "Order not found or already processed"})";
+                }
+            } catch (const std::exception& e) {
+                res.statusCode = 400;
+                res.statusText = "Bad Request";
+                res.body = R"({"error": ")" + std::string(e.what()) + R"("})";
+            }
+            
             return res;
         });
         
@@ -120,8 +157,8 @@ int main(int argc, char* argv[]) {
             res.headers["Content-Type"] = "application/json";
             
             try {
-                // Extract symbol from path (simplified)
-                std::string symbol = "AAPL"; // TODO: Extract from path params
+                // Extract symbol from path parameters
+                std::string symbol = req.pathParams.at("symbol");
                 double price = marketData->getCurrentPrice(symbol);
                 
                 res.body = R"({"symbol": ")" + symbol + R"(", "price": )" + 
@@ -135,20 +172,97 @@ int main(int argc, char* argv[]) {
             return res;
         });
         
+        // Get all market data
+        router->get("/api/v1/market-data", [marketData](const HttpRequest& req) {
+            HttpResponse res;
+            res.headers["Content-Type"] = "application/json";
+            
+            try {
+                auto symbols = marketData->getAvailableSymbols();
+                res.body = R"({"success": true, "marketData": [)";
+                
+                for (size_t i = 0; i < symbols.size(); ++i) {
+                    if (i > 0) res.body += ", ";
+                    auto data = marketData->getLatestData(symbols[i]);
+                    res.body += R"({"symbol": ")" + symbols[i] + 
+                               R"(", "price": )" + std::to_string(data.price) +
+                               R"(, "volume": )" + std::to_string(data.volume) + "}";
+                }
+                
+                res.body += "]}";
+            } catch (const std::exception& e) {
+                res.statusCode = 500;
+                res.statusText = "Internal Server Error";
+                res.body = R"({"error": ")" + std::string(e.what()) + R"("})";
+            }
+            
+            return res;
+        });
+        
+        // Portfolio endpoint
+        router->get("/api/v1/portfolio", [portfolio](const HttpRequest& req) {
+            HttpResponse res;
+            res.headers["Content-Type"] = "application/json";
+            
+            try {
+                const auto& assets = portfolio->getAssets();
+                double totalValue = portfolio->getTotalValue();
+                
+                res.body = R"({"success": true, "totalValue": )" + std::to_string(totalValue) + 
+                          R"(, "assets": [)";
+                
+                for (size_t i = 0; i < assets.size(); ++i) {
+                    if (i > 0) res.body += ", ";
+                    const auto& asset = assets[i];
+                    res.body += R"({"symbol": ")" + asset.symbol + 
+                               R"(", "quantity": )" + std::to_string(asset.quantity) +
+                               R"(, "currentPrice": )" + std::to_string(asset.currentPrice) +
+                               R"(, "averageCost": )" + std::to_string(asset.averageCost) + "}";
+                }
+                
+                res.body += "]}";
+            } catch (const std::exception& e) {
+                res.statusCode = 500;
+                res.statusText = "Internal Server Error";
+                res.body = R"({"error": ")" + std::string(e.what()) + R"("})";
+            }
+            
+            return res;
+        });
+        
         // Authentication endpoints
         router->post("/api/v1/auth/login", [authController](const HttpRequest& req) {
             HttpResponse res;
             res.headers["Content-Type"] = "application/json";
             
-            // TODO: Parse credentials from request body
-            bool success = authController->login("testuser", "testpass");
-            
-            if (success) {
-                res.body = R"({"token": "dummy-jwt-token", "expiresIn": 3600})";
-            } else {
-                res.statusCode = 401;
-                res.statusText = "Unauthorized";
-                res.body = R"({"error": "Invalid credentials"})";
+            try {
+                // Parse credentials from request body
+                std::string username = JsonParser::extractString(req.body, "username");
+                std::string password = JsonParser::extractString(req.body, "password");
+                
+                if (username.empty() || password.empty()) {
+                    res.statusCode = 400;
+                    res.statusText = "Bad Request";
+                    res.body = R"({"error": "Username and password are required"})";
+                    return res;
+                }
+                
+                bool success = authController->login(username, password);
+                
+                if (success) {
+                    // Generate JWT token
+                    std::string userId = "user123"; // TODO: Get actual user ID from database
+                    std::string token = authController->generateAuthToken(userId, username);
+                    res.body = R"({"token": ")" + token + R"(", "expiresIn": 3600})";
+                } else {
+                    res.statusCode = 401;
+                    res.statusText = "Unauthorized";
+                    res.body = R"({"error": "Invalid credentials"})";
+                }
+            } catch (const std::exception& e) {
+                res.statusCode = 400;
+                res.statusText = "Bad Request";
+                res.body = R"({"error": ")" + std::string(e.what()) + R"("})";
             }
             
             return res;
