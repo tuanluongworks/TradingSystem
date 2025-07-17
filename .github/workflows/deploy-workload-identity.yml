@@ -1,4 +1,4 @@
-name: Deploy to Google Cloud Run
+name: Deploy to Google Cloud Run (Workload Identity)
 
 on:
   push:
@@ -47,55 +47,42 @@ jobs:
     steps:
     - uses: actions/checkout@v4
 
-    - name: Verify GitHub Secrets
-      run: |
-        if [ -z "${{ secrets.GCP_SA_KEY }}" ]; then
-          echo "❌ GCP_SA_KEY secret is not set"
-          echo "Please add the service account key to GitHub Secrets"
-          echo "Run setup-github-auth.bat to create the service account and get the key"
-          exit 1
-        else
-          echo "✅ GCP_SA_KEY secret is configured"
-        fi
-
-    - name: Google Auth
+    # Alternative 1: Workload Identity (more secure, but requires additional setup)
+    - name: Google Auth (Workload Identity)
       id: auth
       uses: google-github-actions/auth@v2
       with:
-        credentials_json: '${{ secrets.GCP_SA_KEY }}'
+        workload_identity_provider: 'projects/123456789/locations/global/workloadIdentityPools/github-pool/providers/github-provider'
+        service_account: 'github-actions@tuanluongworks.iam.gserviceaccount.com'
+
+    # Alternative 2: Service Account Key (simpler setup)
+    # Uncomment this and comment out the Workload Identity section above if using service account key
+    # - name: Google Auth (Service Account Key)
+    #   id: auth
+    #   uses: google-github-actions/auth@v2
+    #   with:
+    #     credentials_json: '${{ secrets.GCP_SA_KEY }}'
 
     - name: Set up Cloud SDK
       uses: google-github-actions/setup-gcloud@v2
       with:
         project_id: ${{ env.PROJECT_ID }}
 
-    - name: Verify GCP Authentication
-      run: |
-        echo "Testing GCP authentication..."
-        gcloud auth list
-        gcloud config list project
-        echo "✅ GCP authentication verified"
-
     - name: Configure Docker
       run: gcloud auth configure-docker
 
     - name: Build Docker image
       run: |
-        echo "Building Docker image..."
         docker build -t gcr.io/$PROJECT_ID/$SERVICE_NAME:$GITHUB_SHA .
         docker tag gcr.io/$PROJECT_ID/$SERVICE_NAME:$GITHUB_SHA gcr.io/$PROJECT_ID/$SERVICE_NAME:latest
-        echo "✅ Docker image built successfully"
 
     - name: Push Docker image
       run: |
-        echo "Pushing Docker image to GCR..."
         docker push gcr.io/$PROJECT_ID/$SERVICE_NAME:$GITHUB_SHA
         docker push gcr.io/$PROJECT_ID/$SERVICE_NAME:latest
-        echo "✅ Docker image pushed successfully"
 
     - name: Deploy to Cloud Run
       run: |
-        echo "Deploying to Cloud Run..."
         gcloud run deploy $SERVICE_NAME \
           --image gcr.io/$PROJECT_ID/$SERVICE_NAME:$GITHUB_SHA \
           --platform managed \
@@ -109,7 +96,6 @@ jobs:
           --port 8080 \
           --set-env-vars "PORT=8080,CONFIG_FILE=config/production.ini" \
           --project $PROJECT_ID
-        echo "✅ Deployment to Cloud Run completed"
 
     - name: Get service URL
       run: |
@@ -119,8 +105,6 @@ jobs:
 
     - name: Test deployment
       run: |
-        echo "Testing deployment..."
         sleep 30  # Wait for service to be ready
         curl -f $SERVICE_URL/health || exit 1
         echo "✅ Health check passed!"
-        echo "🎉 Deployment successful! Service is running at: $SERVICE_URL"

@@ -101,28 +101,33 @@ gcloud run deploy trading-system \
 
 ## CI/CD with GitHub Actions
 
+### 🚨 IMPORTANT: Fix GitHub Authentication First
+
+If you get the error: "must specify exactly one of workload_identity_provider or credentials_json", run this first:
+
+**Windows:**
+```cmd
+setup-github-auth.bat
+```
+
+**Linux/macOS:**
+```bash
+chmod +x setup-github-auth.sh
+./setup-github-auth.sh
+```
+
+This will:
+- Create a service account with proper permissions
+- Generate a service account key
+- Show you exactly what to add as a GitHub Secret
+
 ### Set up automated deployment:
 
-1. **Create a Service Account:**
-   ```bash
-   gcloud iam service-accounts create github-actions \
-       --display-name="GitHub Actions"
-   
-   gcloud projects add-iam-policy-binding tuanluongworks \
-       --member="serviceAccount:github-actions@tuanluongworks.iam.gserviceaccount.com" \
-       --role="roles/run.admin"
-   
-   gcloud projects add-iam-policy-binding tuanluongworks \
-       --member="serviceAccount:github-actions@tuanluongworks.iam.gserviceaccount.com" \
-       --role="roles/storage.admin"
-   
-   gcloud iam service-accounts keys create github-actions-key.json \
-       --iam-account=github-actions@tuanluongworks.iam.gserviceaccount.com
-   ```
+1. **Create and Configure Service Account** (use the script above)
 
-2. **Add GitHub Secrets:**
+2. **Add GitHub Secret:**
    - Go to your GitHub repository → Settings → Secrets and variables → Actions
-   - Add secret `GCP_SA_KEY` with the contents of `github-actions-key.json`
+   - Add secret `GCP_SA_KEY` with the JSON content from the setup script
 
 3. **Push to main branch** - GitHub Actions will automatically deploy!
 
@@ -164,17 +169,23 @@ The configuration automatically scales to zero when not in use to minimize costs
 
 ### Common Issues:
 
-1. **Cloud Build trigger creation failed**: 
+1. **GitHub Actions authentication failed**:
+   ```
+   Error: must specify exactly one of workload_identity_provider or credentials_json
+   ```
+   **Solution**: Run `setup-github-auth.bat` and add the GCP_SA_KEY secret to GitHub
+
+2. **Cloud Build trigger creation failed**: 
    ```
    Error: Required roles: roles/run.admin, roles/iam.serviceAccountUser
    ```
    **Solution**: Run `fix-gcp-permissions.bat` to fix IAM permissions
 
-2. **Build fails**: Check Docker is running and CMake version ≥ 3.20
+3. **Build fails**: Check Docker is running and CMake version ≥ 3.20
 
-3. **Permission denied**: Run `gcloud auth login` and check project ID
+4. **Permission denied**: Run `gcloud auth login` and check project ID
 
-4. **Service won't start**: Check logs with `gcloud logs tail`
+5. **Service won't start**: Check logs with `gcloud logs tail`
 
 ### Debug Commands:
 
