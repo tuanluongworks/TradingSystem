@@ -18,9 +18,11 @@ WORKDIR /app
 COPY CMakeLists.txt ./
 COPY src/ ./src/
 COPY config/ ./config/
-COPY data/ ./data/
 COPY tests/ ./tests/
 COPY third_party/ ./third_party/
+
+# Copy data directory if it exists
+COPY data/ ./data/
 
 # Create build directory and build the application
 RUN mkdir -p build && cd build && \
