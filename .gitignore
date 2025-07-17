@@ -76,3 +76,11 @@ Thumbs.db
 # Configuration overrides
 config/local.*
 config/*.local.*
+
+# Docker and deployment
+.dockerignore
+docker-compose.override.yml
+github-actions-key.json
+
+# Cloud deployment
+.gcloudignore

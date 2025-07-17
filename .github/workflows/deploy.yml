@@ -1,0 +1,99 @@
+name: Deploy to Google Cloud Run
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  PROJECT_ID: tuanluongworks
+  SERVICE_NAME: trading-system
+  REGION: us-central1
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v4
+    
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential cmake libssl-dev
+    
+    - name: Build project
+      run: |
+        mkdir build
+        cd build
+        cmake ..
+        make -j$(nproc)
+    
+    - name: Run tests
+      run: |
+        cd build
+        # Add test commands here when available
+        # ctest --output-on-failure
+
+  deploy:
+    needs: test
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Google Auth
+      id: auth
+      uses: google-github-actions/auth@v2
+      with:
+        credentials_json: '${{ secrets.GCP_SA_KEY }}'
+        project_id: ${{ env.PROJECT_ID }}
+
+    - name: Set up Cloud SDK
+      uses: google-github-actions/setup-gcloud@v2
+
+    - name: Configure Docker
+      run: gcloud auth configure-docker
+
+    - name: Build Docker image
+      run: |
+        docker build -t gcr.io/$PROJECT_ID/$SERVICE_NAME:$GITHUB_SHA .
+        docker tag gcr.io/$PROJECT_ID/$SERVICE_NAME:$GITHUB_SHA gcr.io/$PROJECT_ID/$SERVICE_NAME:latest
+
+    - name: Push Docker image
+      run: |
+        docker push gcr.io/$PROJECT_ID/$SERVICE_NAME:$GITHUB_SHA
+        docker push gcr.io/$PROJECT_ID/$SERVICE_NAME:latest
+
+    - name: Deploy to Cloud Run
+      run: |
+        gcloud run deploy $SERVICE_NAME \
+          --image gcr.io/$PROJECT_ID/$SERVICE_NAME:$GITHUB_SHA \
+          --platform managed \
+          --region $REGION \
+          --allow-unauthenticated \
+          --memory 512Mi \
+          --cpu 1 \
+          --concurrency 100 \
+          --max-instances 10 \
+          --min-instances 0 \
+          --port 8080 \
+          --set-env-vars "PORT=8080,CONFIG_FILE=config/production.ini" \
+          --project $PROJECT_ID
+
+    - name: Get service URL
+      run: |
+        SERVICE_URL=$(gcloud run services describe $SERVICE_NAME --region=$REGION --format='value(status.url)' --project=$PROJECT_ID)
+        echo "Service deployed at: $SERVICE_URL"
+        echo "SERVICE_URL=$SERVICE_URL" >> $GITHUB_ENV
+
+    - name: Test deployment
+      run: |
+        sleep 30  # Wait for service to be ready
+        curl -f $SERVICE_URL/health || exit 1
+        echo "✅ Health check passed!"
