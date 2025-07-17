@@ -209,6 +209,61 @@ docker run -p 8080:8080 gcr.io/tuanluongworks/trading-system:latest
 gcloud projects get-iam-policy tuanluongworks
 ```
 
+## 🧪 Testing the Build
+
+Before deploying, test the Docker build locally:
+
+```bash
+# Windows
+test-docker-build.bat
+
+# Linux/Mac
+./test-docker-build.sh
+```
+
+This will:
+- Build the Docker image locally
+- Test container startup
+- Verify health endpoints
+- Check for errors
+- Clean up test resources
+
+## 🚨 Enhanced Troubleshooting
+
+### Docker Build Issues:
+
+1. **Shell syntax error in COPY command**: 
+   ```
+   ERROR: failed to process "\"No": unexpected end of statement while looking for matching double-quote
+   ```
+   **Solution**: Fixed - COPY commands cannot use shell operators like `||` or redirection. Use separate RUN commands for shell logic.
+
+2. **Missing data directory error**: 
+   ```
+   #13 [stage-1 4/7] COPY --from=builder /app/build/TradingSystem /app/ ... /app/data: not found
+   ```
+   **Solution**: Fixed - Dockerfile now properly copies data directory from source in builder stage.
+
+2. **Build context too large**:
+   ```
+   Error: build context exceeds maximum size
+   ```
+   **Solution**: Check `.dockerignore` excludes build artifacts:
+   ```
+   build/
+   .git/
+   *.log
+   third_party/build/
+   ```
+
+3. **CMake build fails**:
+   ```
+   Error: CMake version 3.20 or higher is required
+   ```
+   **Solution**: Dockerfile uses Ubuntu 22.04 with CMake 3.22+
+
+### Authentication Issues:
+
 ## Security Considerations
 
 - Change JWT secret in production configuration

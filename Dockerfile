@@ -14,10 +14,11 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy source code (excluding data directory for now)
+# Copy source code
 COPY CMakeLists.txt ./
 COPY src/ ./src/
 COPY config/ ./config/
+COPY data/ ./data/
 COPY tests/ ./tests/
 COPY third_party/ ./third_party/
 
@@ -44,15 +45,8 @@ COPY --from=builder /app/build/TradingSystem /app/
 # Copy configuration files
 COPY --from=builder /app/config /app/config/
 
-# Copy data files directly from source (create directory if it doesn't exist)
-RUN mkdir -p /app/data
-COPY data/ /app/data/ 2>/dev/null || echo "No data directory found, creating empty one"
-
-# Ensure data files exist with defaults if missing
-RUN if [ ! -f /app/data/users.json ]; then echo '[]' > /app/data/users.json; fi && \
-    if [ ! -f /app/data/orders.json ]; then echo '[]' > /app/data/orders.json; fi && \
-    if [ ! -f /app/data/assets.json ]; then echo '[]' > /app/data/assets.json; fi && \
-    if [ ! -f /app/data/market_data.json ]; then echo '{}' > /app/data/market_data.json; fi
+# Copy data files from builder stage
+COPY --from=builder /app/data /app/data/
 
 # Create logs directory
 RUN mkdir -p /app/logs
