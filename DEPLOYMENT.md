@@ -11,6 +11,27 @@ Before deploying, ensure you have:
 3. **Docker**: [Install Docker Desktop](https://www.docker.com/products/docker-desktop/)
 4. **Git**: For version control
 
+## 🚨 IMPORTANT: Fix GCP Permissions First
+
+If you encountered the error: "Required roles: roles/run.admin, roles/iam.serviceAccountUser", run this first:
+
+**Windows:**
+```cmd
+fix-gcp-permissions.bat
+```
+
+**Linux/macOS:**
+```bash
+chmod +x fix-gcp-permissions.sh
+./fix-gcp-permissions.sh
+```
+
+This script will:
+- Enable all required APIs
+- Fix Cloud Build service account permissions
+- Fix Compute Engine service account permissions
+- Test the setup end-to-end
+
 ## Quick Start Deployment
 
 ### 1. Set up Google Cloud Project
@@ -143,9 +164,17 @@ The configuration automatically scales to zero when not in use to minimize costs
 
 ### Common Issues:
 
-1. **Build fails**: Check Docker is running and CMake version ≥ 3.20
-2. **Permission denied**: Run `gcloud auth login` and check project ID
-3. **Service won't start**: Check logs with `gcloud logs tail`
+1. **Cloud Build trigger creation failed**: 
+   ```
+   Error: Required roles: roles/run.admin, roles/iam.serviceAccountUser
+   ```
+   **Solution**: Run `fix-gcp-permissions.bat` to fix IAM permissions
+
+2. **Build fails**: Check Docker is running and CMake version ≥ 3.20
+
+3. **Permission denied**: Run `gcloud auth login` and check project ID
+
+4. **Service won't start**: Check logs with `gcloud logs tail`
 
 ### Debug Commands:
 
@@ -158,6 +187,9 @@ gcloud logs tail --filter="resource.type=cloud_run_revision"
 
 # Test locally
 docker run -p 8080:8080 gcr.io/tuanluongworks/trading-system:latest
+
+# Check IAM permissions
+gcloud projects get-iam-policy tuanluongworks
 ```
 
 ## Security Considerations
