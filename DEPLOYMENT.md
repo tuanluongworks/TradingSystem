@@ -169,23 +169,29 @@ The configuration automatically scales to zero when not in use to minimize costs
 
 ### Common Issues:
 
-1. **GitHub Actions authentication failed**:
+1. **Workload Identity Federation error**:
+   ```
+   Error: failed to generate Google Cloud federated token for workloadIdentityPools/github-pool
+   ```
+   **Solution**: Run `cleanup-workload-identity.bat` then `setup-github-auth.bat`
+
+2. **GitHub Actions authentication failed**:
    ```
    Error: must specify exactly one of workload_identity_provider or credentials_json
    ```
    **Solution**: Run `setup-github-auth.bat` and add the GCP_SA_KEY secret to GitHub
 
-2. **Cloud Build trigger creation failed**: 
+3. **Cloud Build trigger creation failed**: 
    ```
    Error: Required roles: roles/run.admin, roles/iam.serviceAccountUser
    ```
    **Solution**: Run `fix-gcp-permissions.bat` to fix IAM permissions
 
-3. **Build fails**: Check Docker is running and CMake version ≥ 3.20
+4. **Build fails**: Check Docker is running and CMake version ≥ 3.20
 
-4. **Permission denied**: Run `gcloud auth login` and check project ID
+5. **Permission denied**: Run `gcloud auth login` and check project ID
 
-5. **Service won't start**: Check logs with `gcloud logs tail`
+6. **Service won't start**: Check logs with `gcloud logs tail`
 
 ### Debug Commands:
 
