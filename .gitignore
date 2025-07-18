@@ -44,8 +44,8 @@ Makefile
 *.log
 logs/
 
-# Database files
-data/
+# Database files (keep sample data files, exclude actual database files)
+# data/
 *.db
 *.sqlite
 
