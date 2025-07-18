@@ -21,7 +21,7 @@ COPY config/ ./config/
 COPY tests/ ./tests/
 COPY third_party/ ./third_party/
 
-# Copy data directory if it exists
+# Copy data directory
 COPY data/ ./data/
 
 # Create build directory and build the application
