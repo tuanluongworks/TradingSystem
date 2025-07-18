@@ -12,19 +12,20 @@ set -e
 PROJECT_ID="tuanluongworks"  # Update this to your actual project ID
 SERVICE_NAME="trading-system"
 REGION="us-central1"  # Change to your preferred region
-IMAGE_NAME="gcr.io/${PROJECT_ID}/${SERVICE_NAME}"
+REPOSITORY_NAME="trading-system"
+IMAGE_NAME="us-central1-docker.pkg.dev/${PROJECT_ID}/${REPOSITORY_NAME}/${SERVICE_NAME}"
 
 echo "🚀 Starting deployment to Google Cloud Run..."
 
 # Step 1: Enable required APIs
 echo "📋 Enabling required Google Cloud APIs..."
 gcloud services enable run.googleapis.com --project=${PROJECT_ID}
-gcloud services enable containerregistry.googleapis.com --project=${PROJECT_ID}
+gcloud services enable artifactregistry.googleapis.com --project=${PROJECT_ID}
 gcloud services enable cloudbuild.googleapis.com --project=${PROJECT_ID}
 
-# Step 2: Configure Docker for GCR
-echo "🐳 Configuring Docker for Google Container Registry..."
-gcloud auth configure-docker
+# Step 2: Configure Docker for Artifact Registry
+echo "🐳 Configuring Docker for Artifact Registry..."
+gcloud auth configure-docker ${REGION}-docker.pkg.dev
 
 # Step 3: Build the Docker image
 echo "🔨 Building Docker image..."
