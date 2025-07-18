@@ -1,0 +1,31 @@
+# Cloud Build configuration to run the automatic migration
+# This should be run ONCE before your regular builds to migrate from Container Registry to Artifact Registry
+
+steps:
+  # Step 1: Run the automatic migration
+  - name: 'gcr.io/cloud-builders/gcloud'
+    entrypoint: 'bash'
+    args:
+      - '-c'
+      - |
+        echo "🚀 Running automatic migration from Container Registry to Artifact Registry"
+        echo "=================================================================="
+        
+        # Enable required APIs
+        echo "🔌 Enabling Artifact Registry API..."
+        gcloud services enable artifactregistry.googleapis.com
+        
+        # Run the migration
+        echo "🔄 Starting automatic migration..."
+        gcloud artifacts docker upgrade migrate --projects=$PROJECT_ID
+        
+        echo "✅ Migration complete!"
+        echo "🎉 gcr.io URLs now redirect to Artifact Registry automatically"
+    timeout: '1200s'  # 20 minutes
+
+# Build configuration
+options:
+  machineType: 'E2_HIGHCPU_8'
+  logging: CLOUD_LOGGING_ONLY
+
+timeout: '1800s'  # 30 minutes
