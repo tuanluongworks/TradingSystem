@@ -1,149 +1,136 @@
 # Artifact Registry Migration Guide
 
 ## Overview
-Google Container Registry (GCR) is being deprecated and shut down. This guide covers the migration to Google Artifact Registry for the Trading System project.
+Google Container Registry (GCR) is being deprecated and shut down. This guide covers the **automatic migration** to Google Artifact Registry for the Trading System project using Google's official migration tool.
 
-## What Changed
+## ⚠️ Important: Use Google's Automatic Migration Tool
 
-### Before (GCR)
-```
-gcr.io/tuanluongworks/trading-system
-```
+**DO NOT** manually change URLs in your configuration files. Google's migration tool automatically redirects `gcr.io` URLs to Artifact Registry while keeping the same URLs working.
 
-### After (Artifact Registry)
-```
-us-central1-docker.pkg.dev/tuanluongworks/trading-system/trading-system
-```
+## What the Auto-Migration Does
+
+1. **Creates gcr.io repositories in Artifact Registry** - Your images remain accessible at the same `gcr.io/tuanluongworks/trading-system` URLs
+2. **Automatically redirects traffic** - No code changes needed
+3. **Copies all existing images** - All your current images are preserved
+4. **Zero downtime migration** - Service continues running during migration
 
 ## Migration Steps
 
-### 1. Setup Artifact Registry Repository
+### Quick Migration (One Step)
 
-**On Windows:**
-```cmd
-# Run the setup script
-.\setup-artifact-registry.bat
+**In Google Cloud Shell or system with gcloud CLI:**
+```bash
+# Run the quick migration script
+./migrate-to-artifact-registry-quick.sh
+
+# Or run directly:
+gcloud artifacts docker upgrade migrate --projects=tuanluongworks
 ```
 
-**On Linux/macOS:**
+### Safer Phased Migration (Recommended for Production)
+
+**Phase 1: Start with 1% canary reads**
 ```bash
-# Run the setup script
-./setup-artifact-registry.sh
+./migrate-to-artifact-registry.sh
 ```
 
-**Or manually:**
+**Phase 2: Increase to 10% canary reads**
 ```bash
-# Enable APIs
+./migrate-to-artifact-registry-phase2.sh
+```
+
+**Phase 3: Move to 100% canary reads**
+```bash
+./migrate-to-artifact-registry-phase3.sh
+```
+
+**Phase 4: Complete migration**
+```bash
+./migrate-to-artifact-registry-complete.sh
+```
+
+### Manual Commands
+
+If you prefer to run commands manually:
+
+```bash
+# Enable the API
 gcloud services enable artifactregistry.googleapis.com
-gcloud services enable cloudbuild.googleapis.com
-gcloud services enable run.googleapis.com
 
-# Create repository
-gcloud artifacts repositories create trading-system \
-    --repository-format=docker \
-    --location=us-central1 \
-    --description="Docker repository for Trading System"
+# Complete migration in one step
+gcloud artifacts docker upgrade migrate --projects=tuanluongworks
 
-# Configure Docker authentication
-gcloud auth configure-docker us-central1-docker.pkg.dev
+# OR phased approach:
+gcloud artifacts docker upgrade migrate --projects=tuanluongworks --canary-reads=1
+gcloud artifacts docker upgrade migrate --projects=tuanluongworks --canary-reads=10  
+gcloud artifacts docker upgrade migrate --projects=tuanluongworks --canary-reads=100
+gcloud artifacts docker upgrade migrate --projects=tuanluongworks
 ```
 
-### 2. Updated Files
+## After Migration
 
-The following files have been updated to use Artifact Registry:
+### ✅ What Continues to Work
+- **Same URLs**: `gcr.io/tuanluongworks/trading-system` continues to work
+- **Existing CI/CD**: No changes needed to CloudBuild, deploy scripts, or Dockerfiles  
+- **Current deployments**: Existing Cloud Run services continue running
+- **Docker commands**: `docker pull gcr.io/tuanluongworks/trading-system` works as before
 
-- `cloudbuild.yaml` - Updated image URLs and push targets
-- `cloudrun-service.yaml` - Updated container image reference
-- `deploy-gcp.sh` - Updated image names and Docker configuration
-- `deploy-gcp.bat` - Updated image names and Docker configuration
+### 🔍 How to Verify Migration
 
-### 3. Deploy the Changes
-
-**Option A: Using Cloud Build (Recommended)**
 ```bash
-gcloud builds submit --config cloudbuild.yaml
+# Check migration status
+gcloud artifacts settings describe
+
+# List repositories (should show gcr.io repos)
+gcloud artifacts repositories list
+
+# Verify images are accessible
+docker pull gcr.io/tuanluongworks/trading-system:latest
 ```
 
-**Option B: Using local deployment script**
-```bash
-# On Linux/macOS
-./deploy-gcp.sh
+## Rollback (if needed)
 
-# On Windows
-.\deploy-gcp.bat
+If you need to rollback during canary phase:
+```bash
+gcloud artifacts docker upgrade migrate --projects=tuanluongworks --canary-reads=0
 ```
 
 ## Error Resolution
 
-### If you see the error:
+### Current Error
 ```
-Container Registry is deprecated and shutting down, please use the auto migration tool to migrate to Artifact Registry
+Container Registry is deprecated and shutting down, please use the auto migration tool
 ```
 
-**Quick Fix:**
-1. Run the setup script: `.\setup-artifact-registry.bat`
-2. Commit and push the updated configuration files
-3. Re-run your deployment
-
-### Auto-migration (if available)
+**Solution**: Run the migration command:
 ```bash
-gcloud artifacts docker upgrade migrate --projects='tuanluongworks'
-```
-
-## Verification
-
-After migration, verify the setup:
-
-```bash
-# List repositories
-gcloud artifacts repositories list --location=us-central1
-
-# List images
-gcloud artifacts docker images list us-central1-docker.pkg.dev/tuanluongworks/trading-system
-
-# Test deployment
-gcloud run services describe trading-system --region=us-central1
-```
-
-## Benefits of Artifact Registry
-
-1. **Enhanced Security**: Vulnerability scanning and signing
-2. **Better Performance**: Improved push/pull speeds
-3. **Multi-format Support**: Docker, Maven, npm, Python packages
-4. **Fine-grained Access Control**: IAM integration
-5. **Cost Optimization**: Better storage management
-
-## Repository Structure
-
-```
-us-central1-docker.pkg.dev/
-└── tuanluongworks/                 # Project ID
-    └── trading-system/             # Repository name
-        └── trading-system/         # Image name
-            ├── latest              # Latest tag
-            └── [commit-sha]        # Commit-specific tags
-```
-
-## Troubleshooting
-
-### Authentication Issues
-```bash
-gcloud auth login
-gcloud auth configure-docker us-central1-docker.pkg.dev
+gcloud artifacts docker upgrade migrate --projects=tuanluongworks
 ```
 
 ### Permission Issues
+Ensure you have the required role:
 ```bash
-# Ensure you have the required roles
-gcloud projects add-iam-policy-binding tuanluongworks \
-    --member="user:your-email@domain.com" \
-    --role="roles/artifactregistry.writer"
+# Check your roles
+gcloud projects get-iam-policy tuanluongworks --flatten="bindings[].members" --filter="bindings.members:user:YOUR_EMAIL"
+
+# The migration tool will suggest required permissions if missing
 ```
 
-### Repository Not Found
-```bash
-# Recreate the repository
-gcloud artifacts repositories create trading-system \
-    --repository-format=docker \
-    --location=us-central1
+## Benefits After Migration
+
+1. **No Code Changes Required** - Same URLs continue working
+2. **Enhanced Security** - Vulnerability scanning and signing
+3. **Better Performance** - Improved push/pull speeds  
+4. **Multi-format Support** - Docker, Maven, npm, Python packages
+5. **Fine-grained Access Control** - Better IAM integration
+6. **Cost Optimization** - Improved storage management
+
+## Repository Structure After Migration
+
+Your images remain accessible at the same URLs:
 ```
+gcr.io/tuanluongworks/trading-system:latest
+gcr.io/tuanluongworks/trading-system:[commit-sha]
+```
+
+But are now served from Artifact Registry gcr.io repositories with enhanced features.
