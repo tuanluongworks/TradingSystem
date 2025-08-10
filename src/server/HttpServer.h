@@ -7,6 +7,7 @@
 #include <atomic>
 #include <functional>
 #include <map>
+#include "../infrastructure/ThreadPool.h"
 
 #ifdef _WIN32
     #include <winsock2.h>
@@ -66,6 +67,7 @@ private:
     std::atomic<bool> running;
     std::thread serverThread;
     std::shared_ptr<Router> router;
+    ThreadPool requestPool_{4}; // initial fixed worker size; could be made configurable
     
     void serverLoop();
     void handleClient(SOCKET clientSocket);

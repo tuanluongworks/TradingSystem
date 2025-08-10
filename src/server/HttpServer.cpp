@@ -134,22 +134,16 @@ void HttpServer::serverLoop() {
 #endif
         
         SOCKET clientSocket = accept(serverSocket, (sockaddr*)&clientAddr, &clientAddrLen);
-        
         if (clientSocket != INVALID_SOCKET) {
-            // Set client socket back to blocking mode
+            // restore blocking mode
 #ifdef _WIN32
-            mode = 0;
-            ioctlsocket(clientSocket, FIONBIO, &mode);
+            mode = 0; ioctlsocket(clientSocket, FIONBIO, &mode);
 #else
-            flags = fcntl(clientSocket, F_GETFL, 0);
-            fcntl(clientSocket, F_SETFL, flags & ~O_NONBLOCK);
+            flags = fcntl(clientSocket, F_GETFL, 0); fcntl(clientSocket, F_SETFL, flags & ~O_NONBLOCK);
 #endif
-            
-            std::thread clientThread(&HttpServer::handleClient, this, clientSocket);
-            clientThread.detach();
+            requestPool_.submit([this, clientSocket]{ handleClient(clientSocket); });
         }
-        
-        std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        std::this_thread::sleep_for(std::chrono::milliseconds(5));
     }
 }
 
