@@ -16,6 +16,8 @@
 #include "utils/Logger.h"
 #include "utils/JsonParser.h"
 #include "common/Constants.h"
+#include "utils/ErrorResponse.h"
+#include "common/Errors.h"
 
 // Global server pointer for signal handling
 std::unique_ptr<HttpServer> g_server;
@@ -236,41 +238,16 @@ int main(int argc, char* argv[]) {
         
         // Authentication endpoints
         router->post("/api/v1/auth/login", [authController](const HttpRequest& req) {
-            HttpResponse res;
-            res.headers["Content-Type"] = "application/json";
-            
+            HttpResponse res; res.headers["Content-Type"] = "application/json";
             try {
-                // Parse credentials from request body
                 std::string username = JsonParser::extractString(req.body, "username");
                 std::string password = JsonParser::extractString(req.body, "password");
-                
-                if (username.empty() || password.empty()) {
-                    res.statusCode = 400;
-                    res.statusText = "Bad Request";
-                    res.body = R"({"error": "Username and password are required"})";
-                    return res;
-                }
-                
+                if (username.empty() || password.empty()) { auto err = Error::validation("Username and password are required"); res.statusCode = 400; res.statusText = "Bad Request"; res.body = buildErrorJson(err); return res; }
                 bool success = authController->login(username, password);
-                
-                if (success) {
-                    // Generate JWT token
-                    std::string userId = "user123"; // TODO: Get actual user ID from database
-                    std::string token = authController->generateAuthToken(userId, username);
-                    res.body = R"({"token": ")" + token + R"(", "expiresIn": 3600})";
-                } else {
-                    res.statusCode = 401;
-                    res.statusText = "Unauthorized";
-                    res.body = R"({"error": "Invalid credentials"})";
-                }
-            } catch (const std::exception& e) {
-                res.statusCode = 400;
-                res.statusText = "Bad Request";
-                res.body = R"({"error": ")" + std::string(e.what()) + R"("})";
-            }
-            
-            return res;
-        });
+                if (success) { std::string userId = "user123"; std::string token = authController->generateAuthToken(userId, username); res.body = std::string("{\"token\":\"") + token + "\",\"expiresIn\":3600}"; }
+                else { auto err = Error::auth("Invalid credentials"); res.statusCode = 401; res.statusText = "Unauthorized"; res.body = buildErrorJson(err); }
+            } catch(const std::exception& e) { auto err = Error::internal("Unhandled exception", e.what()); res.statusCode = 500; res.statusText = "Internal Server Error"; res.body = buildErrorJson(err); }
+            return res; });
         
         // Get port from config or use default
         int port = Constants::DEFAULT_PORT;
