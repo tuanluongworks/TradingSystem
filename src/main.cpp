@@ -49,6 +49,9 @@ int main(int argc, char* argv[]) {
         
         // Initialize logger
         Logger logger("trading_system.log");
+        std::string logLevelStr = config.getValue("logging.level");
+        if (logLevelStr=="DEBUG") logger.setMinimumLevel(LogSeverity::DEBUG); else if (logLevelStr=="INFO") logger.setMinimumLevel(LogSeverity::INFO); else if (logLevelStr=="WARN") logger.setMinimumLevel(LogSeverity::WARN); else if (logLevelStr=="ERROR") logger.setMinimumLevel(LogSeverity::ERROR);
+        logger.log(LogSeverity::INFO, "Server initializing", LogContext{.correlationId="startup"});
         
         // Initialize database
         auto dbManager = std::make_shared<DatabaseManager>();

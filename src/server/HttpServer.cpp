@@ -6,10 +6,13 @@
 #include <cstring>
 #include <algorithm>
 #include <chrono>
+#include <random>
 
 #ifndef _WIN32
     #include <fcntl.h>
 #endif
+
+static std::string genCorrelationId(){ static std::mt19937_64 rng{std::random_device{}()}; static const char* hex="0123456789abcdef"; uint64_t v=rng(); char buf[17]; for(int i=0;i<16;++i){ buf[i]=hex[(v>>(i*4))&0xF]; } buf[16]='\0'; return std::string(buf);} 
 
 std::string HttpResponse::toString() const {
     std::ostringstream oss;
@@ -224,6 +227,7 @@ HttpRequest HttpServer::parseRequest(const std::string& rawRequest) {
     std::string remaining((std::istreambuf_iterator<char>(stream)), std::istreambuf_iterator<char>());
     request.body = remaining;
     
+    if (request.headers.find("X-Correlation-ID") != request.headers.end()) request.correlationId = request.headers["X-Correlation-ID"]; else request.correlationId = genCorrelationId();
     return request;
 }
 

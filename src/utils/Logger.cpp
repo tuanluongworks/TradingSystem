@@ -3,12 +3,11 @@
 #include <fstream>
 #include <ctime>
 #include <sstream>
+#include <chrono>
+#include <mutex>
 
 Logger::Logger(const std::string& filename) {
     logFile.open(filename, std::ios::app);
-    if (!logFile.is_open()) {
-        std::cerr << "Failed to open log file: " << filename << std::endl;
-    }
 }
 
 Logger::~Logger() {
@@ -17,25 +16,42 @@ Logger::~Logger() {
     }
 }
 
-void Logger::log(const std::string& message, LogLevel level) {
-    if (logFile.is_open()) {
-        logFile << getCurrentTime() << " [" << logLevelToString(level) << "] - " << message << std::endl;
-    }
+std::string Logger::isoTime() {
+    auto now = std::chrono::system_clock::now();
+    auto t = std::chrono::system_clock::to_time_t(now);
+    std::tm tm{};
+#ifdef _WIN32
+    localtime_s(&tm, &t);
+#else
+    localtime_r(&t, &tm);
+#endif
+    char buf[32];
+    std::strftime(buf, sizeof(buf), "%Y-%m-%dT%H:%M:%S", &tm);
+    return std::string(buf);
 }
 
-std::string Logger::getCurrentTime() {
-    std::time_t now = std::time(nullptr);
-    std::tm* localTime = std::localtime(&now);
-    std::ostringstream oss;
-    oss << std::put_time(localTime, "%Y-%m-%d %H:%M:%S");
-    return oss.str();
-}
-
-std::string Logger::logLevelToString(LogLevel level) {
-    switch (level) {
-        case INFO: return "INFO";
-        case WARNING: return "WARNING";
-        case LOG_ERROR: return "ERROR";
-        default: return "UNKNOWN";
+void Logger::log(LogSeverity level, const std::string& message, const std::optional<LogContext>& ctx) {
+    if (level < minLevel_) return;
+    std::lock_guard<std::mutex> lock(mutex_);
+    if (!logFile.is_open()) return;
+    auto lvlStr = [level]() {
+        switch(level){
+            case LogSeverity::DEBUG: return "DEBUG";
+            case LogSeverity::INFO: return "INFO";
+            case LogSeverity::WARN: return "WARN";
+            case LogSeverity::ERROR: return "ERROR";
+        }
+        return "INFO";
+    }();
+    logFile << '{' << "\"ts\":\"" << isoTime() << "\",\"level\":\"" << lvlStr << "\",\"msg\":\"";
+    for(char c: message){
+        if(c=='"') logFile << '\\';
+        logFile << c;
     }
+    logFile << "\"";
+    if (ctx) {
+        if (!ctx->correlationId.empty()) logFile << ",\"corr\":\"" << ctx->correlationId << "\"";
+        if (!ctx->userId.empty()) logFile << ",\"user\":\"" << ctx->userId << "\"";
+    }
+    logFile << "}\n";
 }

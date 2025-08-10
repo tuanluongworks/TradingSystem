@@ -6,25 +6,21 @@
 #include <fstream>
 #include <chrono>
 #include <iomanip>
+#include <mutex>
+#include <optional>
+
+enum class LogSeverity { DEBUG=0, INFO=1, WARN=2, ERROR=3 };
+
+struct LogContext { std::string correlationId; std::string userId; };
 
 class Logger {
 public:
-    enum LogLevel {
-        INFO,
-        WARNING,
-        LOG_ERROR  // Renamed to avoid Windows macro conflict
-    };
-
     Logger(const std::string& filename);
     ~Logger();
-
-    void log(const std::string& message, LogLevel level = INFO);
-
+    void log(LogSeverity level, const std::string& message, const std::optional<LogContext>& ctx = std::nullopt);
+    void setMinimumLevel(LogSeverity lvl) { minLevel_ = lvl; }
 private:
-    std::ofstream logFile;
-
-    std::string getCurrentTime();
-    std::string logLevelToString(LogLevel level);
+    std::ofstream logFile; std::mutex mutex_; LogSeverity minLevel_{LogSeverity::INFO};
+    std::string isoTime();
 };
-
 #endif // LOGGER_H

@@ -34,6 +34,8 @@ struct HttpRequest {
     std::map<std::string, std::string> headers;
     std::string body;
     std::map<std::string, std::string> pathParams;
+    std::string correlationId;
+    std::string userId;
 };
 
 struct HttpResponse {
