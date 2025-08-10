@@ -1,14 +1,16 @@
+# syntax=docker/dockerfile:1
 # Multi-stage Docker build for C++ Trading System
 FROM ubuntu:22.04 AS builder
 
 # Install build dependencies
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     cmake \
     git \
     libssl-dev \
     pkg-config \
     curl \
+    ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 
 # Set working directory
@@ -25,24 +27,24 @@ COPY third_party/ ./third_party/
 COPY data/ ./data/
 
 # Create build directory and build the application
+ARG BUILD_TYPE=Release
 RUN mkdir -p build && cd build && \
-    cmake .. && \
-    make -j$(nproc)
+    cmake -DCMAKE_BUILD_TYPE=${BUILD_TYPE} .. && \
+    make -j$(nproc) app_server
 
 # Production stage
-FROM ubuntu:22.04
+FROM ubuntu:22.04 AS runtime
 
-# Install runtime dependencies
-RUN apt-get update && apt-get install -y \
-    libssl3 \
-    curl \
-    && rm -rf /var/lib/apt/lists/*
+# Create non-root user
+RUN useradd -u 10001 -r -s /usr/sbin/nologin appuser && \
+    mkdir /app && \
+    chown appuser /app
 
-# Create app directory
+# Set working directory
 WORKDIR /app
 
 # Copy the built executable from builder stage
-COPY --from=builder /app/build/TradingSystem /app/
+COPY --from=builder /app/build/app_server /app/TradingSystem
 
 # Copy configuration files
 COPY --from=builder /app/config /app/config/
@@ -51,12 +53,11 @@ COPY --from=builder /app/config /app/config/
 COPY --from=builder /app/data /app/data/
 
 # Create logs directory
-RUN mkdir -p /app/logs
+RUN mkdir -p /app/logs && \
+    chown -R appuser /app/logs
 
-# Set proper permissions
-RUN chmod +x /app/TradingSystem && \
-    chmod -R 755 /app/config && \
-    chmod -R 755 /app/data
+# Switch to non-root user
+USER appuser
 
 # Set environment variables
 ENV PORT=8080
@@ -66,8 +67,8 @@ ENV CONFIG_FILE=config/production.ini
 EXPOSE 8080
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=30s --retries=3 \
-    CMD curl -f http://localhost:8080/health || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+    CMD curl -fsS http://localhost:8080/health || exit 1
 
 # Run the application
-CMD ["./TradingSystem", "config/production.ini"]
+ENTRYPOINT ["/app/TradingSystem", "config/production.ini"]
