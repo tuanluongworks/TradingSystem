@@ -21,6 +21,32 @@ std::function<void(HttpRequest&, HttpResponse&)> RateLimiter::create(
     };
 }
 
+std::function<void(HttpRequest&, HttpResponse&)> RateLimiter::createTokenBucket(const TokenBucketConfig& cfg) {
+    return [cfg](HttpRequest& request, HttpResponse& response) {
+        std::string clientId = getClientIdentifier(request);
+        auto now = std::chrono::steady_clock::now();
+        {
+            std::lock_guard<std::mutex> lock(dataMutex);
+            auto &info = clientData[clientId];
+            if (info.lastRefill.time_since_epoch().count() == 0) { info.lastRefill = now; info.tokens = cfg.capacity; }
+            double elapsed = std::chrono::duration<double>(now - info.lastRefill).count();
+            double refill = elapsed * cfg.refillTokensPerSecond;
+            if (refill > 0.0) {
+                info.tokens = std::min<double>(cfg.capacity, info.tokens + refill);
+                info.lastRefill = now;
+            }
+            if (info.tokens >= 1.0) {
+                info.tokens -= 1.0; // consume
+            } else {
+                response.statusCode = 429; response.statusText = "Too Many Requests";
+                response.headers["Content-Type"] = "application/json";
+                response.headers["Retry-After"] = "1"; // approximate
+                response.body = R"({"error":"Rate limit (token bucket) exceeded"})";
+            }
+        }
+    };
+}
+
 std::string RateLimiter::getClientIdentifier(const HttpRequest& request) {
     // Use IP address from X-Forwarded-For header if available, otherwise use a default
     auto it = request.headers.find("X-Forwarded-For");
@@ -62,4 +88,4 @@ bool RateLimiter::isRateLimited(const std::string& clientId, int maxRequests, in
     
     // Check if limit exceeded
     return info.requestCount > maxRequests;
-} 
+}

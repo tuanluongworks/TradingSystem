@@ -4,6 +4,18 @@
 #include <iomanip>
 #include <algorithm>
 #include <vector>
+#include <functional>
+
+static std::string g_jwt_secret = "development-secret-change"; // overridden via setSigningKey
+static std::string g_jwt_issuer = "trading-system";
+static std::string g_jwt_audience = "trading-clients";
+
+void JwtToken::setSigningKey(const std::string& key) { g_jwt_secret = key; }
+void JwtToken::setIssuer(const std::string& iss) { g_jwt_issuer = iss; }
+void JwtToken::setAudience(const std::string& aud) { g_jwt_audience = aud; }
+std::string& JwtToken::secret() { return g_jwt_secret; }
+std::string& JwtToken::issuer() { return g_jwt_issuer; }
+std::string& JwtToken::audience() { return g_jwt_audience; }
 
 std::string JwtToken::generateToken(const std::string& userId, const std::string& username) {
     // Create header
@@ -22,11 +34,10 @@ std::string JwtToken::generateToken(const std::string& userId, const std::string
     payload["username"] = username;
     payload["exp"] = std::to_string(exp_time);
     payload["iat"] = std::to_string(std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count());
-    std::string payloadJson = JsonParser::createObject(payload);
-    
-    // Encode header and payload
+    payload["iss"] = issuer();
+    payload["aud"] = audience();
     std::string encodedHeader = base64Encode(headerJson);
-    std::string encodedPayload = base64Encode(payloadJson);
+    std::string encodedPayload = base64Encode(JsonParser::createObject(payload));
     
     // Create signature
     std::string dataToSign = encodedHeader + "." + encodedPayload;
@@ -36,7 +47,7 @@ std::string JwtToken::generateToken(const std::string& userId, const std::string
     return encodedHeader + "." + encodedPayload + "." + signature;
 }
 
-bool JwtToken::validateToken(const std::string& token) {
+bool JwtToken::validateToken(const std::string& token, const JwtValidationParams& params) {
     // Split token into parts
     size_t firstDot = token.find('.');
     size_t secondDot = token.find('.', firstDot + 1);
@@ -45,16 +56,36 @@ bool JwtToken::validateToken(const std::string& token) {
         return false;
     }
     
+    std::string encodedHeader = token.substr(0, firstDot);
+    std::string encodedPayload = token.substr(firstDot + 1, secondDot - firstDot - 1);
+    std::string providedSig = token.substr(secondDot + 1);
+    
+    // Verify signature
+    std::string dataToSign = encodedHeader + "." + encodedPayload;
+    std::string expected = createSignature(dataToSign);
+    if (providedSig != expected) {
+        return false;
+    }
     try {
-        // Decode payload to check expiration
-        std::string encodedPayload = token.substr(firstDot + 1, secondDot - firstDot - 1);
-        std::string payloadJson = base64Decode(encodedPayload);
+        std::string headerJson = base64Decode(encodedHeader);
+        std::string alg = JsonParser::extractString(headerJson, "alg");
+        if (alg != "HS256") return false;
         
+        std::string payloadJson = base64Decode(encodedPayload);
         double exp = JsonParser::extractNumber(payloadJson, "exp");
         auto now = std::chrono::system_clock::now();
         auto now_time = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+        if (exp <= now_time) return false;
         
-        return exp > now_time;
+        std::string iss = JsonParser::extractString(payloadJson, "iss");
+        if (!params.expectedIssuer.empty() && iss != params.expectedIssuer) return false;
+        if (params.expectedIssuer.empty() && iss != issuer()) return false;
+        
+        std::string aud = JsonParser::extractString(payloadJson, "aud");
+        if (!params.expectedAudience.empty() && aud != params.expectedAudience) return false;
+        if (params.expectedAudience.empty() && aud != audience()) return false;
+        
+        return true;
     } catch (...) {
         return false;
     }
@@ -74,6 +105,8 @@ std::map<std::string, std::string> JwtToken::decodeToken(const std::string& toke
         result["username"] = JsonParser::extractString(payloadJson, "username");
         result["exp"] = JsonParser::extractString(payloadJson, "exp");
         result["iat"] = JsonParser::extractString(payloadJson, "iat");
+        result["iss"] = JsonParser::extractString(payloadJson, "iss");
+        result["aud"] = JsonParser::extractString(payloadJson, "aud");
     }
     
     return result;
@@ -183,12 +216,10 @@ std::string JwtToken::base64Decode(const std::string& input) {
 }
 
 std::string JwtToken::createSignature(const std::string& data) {
-    // Simple hash function for demo purposes (NOT secure)
-    // In production, use proper HMAC-SHA256
     std::hash<std::string> hasher;
-    size_t hash = hasher(data + "secret-key");
+    size_t hash = hasher(data + secret());
     
     std::ostringstream oss;
     oss << std::hex << hash;
     return base64Encode(oss.str());
-} 
+}

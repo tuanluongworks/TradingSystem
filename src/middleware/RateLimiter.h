@@ -10,6 +10,8 @@
 struct HttpRequest;
 struct HttpResponse;
 
+struct TokenBucketConfig { int capacity; double refillTokensPerSecond; };
+
 class RateLimiter {
 public:
     // Create rate limiter middleware with specified limits
@@ -18,10 +20,14 @@ public:
         int windowSeconds = 60  // Time window in seconds
     );
     
+    static std::function<void(HttpRequest&, HttpResponse&)> createTokenBucket(const TokenBucketConfig& cfg);
+    
 private:
     struct ClientInfo {
         int requestCount;
         std::chrono::steady_clock::time_point windowStart;
+        double tokens{0};
+        std::chrono::steady_clock::time_point lastRefill;
     };
     
     static std::map<std::string, ClientInfo> clientData;
@@ -31,4 +37,4 @@ private:
     static bool isRateLimited(const std::string& clientId, int maxRequests, int windowSeconds);
 };
 
-#endif // RATELIMITER_H 
+#endif // RATELIMITER_H

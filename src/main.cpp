@@ -1,6 +1,7 @@
 #include <iostream>
 #include <memory>
 #include <signal.h>
+#include <cstdlib>
 #include "server/HttpServer.h"
 #include "server/Router.h"
 #include "api/TradingController.h"
@@ -18,6 +19,7 @@
 #include "common/Constants.h"
 #include "utils/ErrorResponse.h"
 #include "common/Errors.h"
+#include "middleware/RateLimiter.h"
 
 // Global server pointer for signal handling
 std::unique_ptr<HttpServer> g_server;
@@ -69,8 +71,11 @@ int main(int argc, char* argv[]) {
         );
         auto authController = std::make_shared<AuthController>();
         
-        // Create router and set up routes
+        // Router creation
         auto router = std::make_shared<Router>();
+        
+        // Add rate limiting (token bucket) before routes
+        router->use(RateLimiter::createTokenBucket(TokenBucketConfig{ .capacity = 50, .refillTokensPerSecond = 10.0 }));
         
         // Health check endpoint
         router->get("/health", [](const HttpRequest& req) {
