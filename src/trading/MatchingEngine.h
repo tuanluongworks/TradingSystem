@@ -9,6 +9,7 @@
 #include <atomic>
 #include <thread>
 #include <optional>
+#include <mutex>
 #include "../infrastructure/LockFreeQueue.h"
 
 struct OrderEntry { Order order; };

@@ -2,6 +2,7 @@
 #include <memory>
 #include <signal.h>
 #include <cstdlib>
+#include <thread>
 #include "server/HttpServer.h"
 #include "server/Router.h"
 #include "api/TradingController.h"
@@ -23,7 +24,7 @@
 
 // Global server pointer for signal handling
 std::unique_ptr<HttpServer> g_server;
-SPSCQueue<TradingEvent>* g_orderEventQueue = nullptr; // global pointer used by managers
+extern SPSCQueue<TradingEvent>* g_orderEventQueue; // defined in EventGlobals.cpp
 
 void signalHandler(int signum) {
     std::cout << "\nInterrupt signal (" << signum << ") received.\n";
@@ -81,7 +82,7 @@ int main(int argc, char* argv[]) {
         router->use(RateLimiter::createTokenBucket(TokenBucketConfig{ .capacity = 50, .refillTokensPerSecond = 10.0 }));
         
         // Health check endpoint
-        router->get("/health", [](const HttpRequest& req) {
+        router->get("/health", [](const HttpRequest& /*req*/) {
             HttpResponse res;
             res.headers["Content-Type"] = "application/json";
             res.body = R"({"status": "healthy", "service": "TradingSystem"})";
@@ -122,7 +123,7 @@ int main(int argc, char* argv[]) {
             return res;
         });
         
-        router->get("/api/v1/orders", [orderManager](const HttpRequest& req) {
+        router->get("/api/v1/orders", [orderManager](const HttpRequest& /*req*/) {
             HttpResponse res;
             res.headers["Content-Type"] = "application/json";
             
@@ -187,7 +188,7 @@ int main(int argc, char* argv[]) {
         });
         
         // Get all market data
-        router->get("/api/v1/market-data", [marketData](const HttpRequest& req) {
+        router->get("/api/v1/market-data", [marketData](const HttpRequest& /*req*/) {
             HttpResponse res;
             res.headers["Content-Type"] = "application/json";
             
@@ -214,7 +215,7 @@ int main(int argc, char* argv[]) {
         });
         
         // Portfolio endpoint
-        router->get("/api/v1/portfolio", [portfolio](const HttpRequest& req) {
+        router->get("/api/v1/portfolio", [portfolio](const HttpRequest& /*req*/) {
             HttpResponse res;
             res.headers["Content-Type"] = "application/json";
             

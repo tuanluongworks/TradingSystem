@@ -11,9 +11,9 @@ target_link_libraries(TradingSystemTests PRIVATE serverlib api domain infra pers
 
 # Platform-specific libraries for tests
 if(WIN32)
-    target_link_libraries(TradingSystemTests ws2_32 wsock32)
+    target_link_libraries(TradingSystemTests PRIVATE ws2_32 wsock32)
 elseif(UNIX)
-    target_link_libraries(TradingSystemTests pthread)
+    target_link_libraries(TradingSystemTests PRIVATE pthread)
 endif()
 
 # Register tests with CTest

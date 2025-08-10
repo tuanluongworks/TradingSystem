@@ -103,7 +103,7 @@ bool Portfolio::hasAsset(const std::string& symbol) const {
 
 void Portfolio::loadFromDatabase() {
     if (dbManager && dbManager->isConnected()) {
-        assets = dbManager->getAssetsByUserId(userId);
+        assets = dbManager->findAssetsByUserId(userId);
         calculateTotalValue();
         std::cout << "Portfolio loaded from database for user: " << userId << "\n";
     }
@@ -119,7 +119,7 @@ void Portfolio::calculateTotalValue() {
 void Portfolio::saveToDatabase() {
     if (dbManager && dbManager->isConnected()) {
         for (const auto& asset : assets) {
-            dbManager->saveAsset(userId, asset);
+            dbManager->save(userId, asset);
         }
     }
 }

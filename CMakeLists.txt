@@ -43,13 +43,14 @@ file(GLOB_RECURSE SRC_API src/api/*.cpp)
 file(GLOB_RECURSE SRC_DB src/database/*.cpp)
 file(GLOB_RECURSE SRC_UTILS src/utils/*.cpp)
 file(GLOB_RECURSE SRC_INFRA src/infrastructure/*.cpp)
+file(GLOB_RECURSE SRC_MIDDLEWARE src/middleware/*.cpp)
 
 # Set sources for different components
 set(DOMAIN_SOURCES ${SRC_TRADING})
 set(API_SOURCES ${SRC_API})
 set(DB_SOURCES ${SRC_DB})
 set(INFRA_SOURCES ${SRC_INFRA} ${SRC_UTILS})
-set(SERVER_SOURCES ${SRC_SERVER})
+set(SERVER_SOURCES ${SRC_SERVER} ${SRC_MIDDLEWARE})
 
 # Create component libraries
 add_library(domain STATIC ${DOMAIN_SOURCES})
@@ -81,11 +82,11 @@ target_link_libraries(app_server PRIVATE serverlib)
 
 # Platform-specific libraries
 if(WIN32)
-    target_link_libraries(app_server ws2_32 wsock32)
-    target_link_libraries(serverlib ws2_32 wsock32)
+    target_link_libraries(app_server PRIVATE ws2_32 wsock32)
+    target_link_libraries(serverlib PRIVATE ws2_32 wsock32)
 elseif(UNIX)
-    target_link_libraries(app_server pthread)
-    target_link_libraries(serverlib pthread)
+    target_link_libraries(app_server PRIVATE pthread)
+    target_link_libraries(serverlib PRIVATE pthread)
 endif()
 
 enable_testing()

@@ -61,7 +61,7 @@ public:
     void stop();
     bool isRunning() const { return running; }
     
-    void setRouter(std::shared_ptr<Router> router) { this->router = router; }
+    void setRouter(std::shared_ptr<Router> routerPtr) { this->router = routerPtr; }
 
 private:
     int port;

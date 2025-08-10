@@ -1,6 +1,7 @@
 #include "MatchingEngine.h"
 #include <iostream>
 #include <chrono>
+#include <mutex>
 
 MatchingEngine::MatchingEngine(SPSCQueue<TradingEvent>& queue) : queue_(queue) {}
 MatchingEngine::~MatchingEngine() { stop(); }

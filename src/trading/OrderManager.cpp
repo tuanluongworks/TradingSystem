@@ -29,7 +29,7 @@ std::string OrderManager::createOrder(const Order& order) {
     activeOrders.push_back(newOrder);
     
     if (dbManager && dbManager->isConnected()) {
-        dbManager->saveOrder(newOrder);
+        dbManager->save(order);
     }
     
     if (g_orderEventQueue) {
@@ -54,7 +54,7 @@ bool OrderManager::cancelOrder(const std::string& orderId) {
         it->status = OrderStatus::CANCELLED;
         
         if (dbManager && dbManager->isConnected()) {
-            dbManager->updateOrderStatus(orderId, OrderStatus::CANCELLED);
+            dbManager->updateStatus(orderId, OrderStatus::CANCELLED);
         } 
         
         if (g_orderEventQueue) {
@@ -83,7 +83,7 @@ bool OrderManager::updateOrder(const std::string& orderId, const Order& updatedO
             *it = newOrder;
             
             if (dbManager && dbManager->isConnected()) {
-                dbManager->saveOrder(newOrder);
+                dbManager->save(newOrder);
             }
             
             return true;
@@ -133,7 +133,7 @@ bool OrderManager::executeOrder(const std::string& orderId) {
         it->status = OrderStatus::FILLED;
         
         if (dbManager && dbManager->isConnected()) {
-            dbManager->updateOrderStatus(orderId, OrderStatus::FILLED);
+            dbManager->updateStatus(orderId, OrderStatus::FILLED);
         } 
         
         if (g_orderEventQueue) {

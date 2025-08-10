@@ -48,7 +48,8 @@ bool DatabaseManager::initializeTables() {
     return true;
 }
 
-bool DatabaseManager::saveOrder(const Order& order) {
+// ---- Order repository implementation ----
+bool DatabaseManager::save(const Order& order) {
     if (!connected) return false;
     
     std::ofstream file("data/orders.json", std::ios::app);
@@ -66,24 +67,21 @@ bool DatabaseManager::saveOrder(const Order& order) {
         order.timestamp.time_since_epoch()).count());
     
     file << JsonParser::createObject(orderData) << "\n";
-    file.close();
-    
     std::cout << "Order saved: " << order.id << " for symbol " << order.symbol << "\n";
     return true;
 }
 
-Order DatabaseManager::getOrderById(const std::string& orderId) {
-    if (!connected) return Order();
+std::optional<Order> DatabaseManager::findOrderById(const std::string& orderId) {
+    if (!connected) return std::nullopt;
     
     std::ifstream file("data/orders.json");
-    if (!file.is_open()) return Order();
+    if (!file.is_open()) return std::nullopt;
     
     std::string line;
     while (std::getline(file, line)) {
-        std::string id = JsonParser::extractString(line, "id");
-        if (id == orderId) {
+        if (JsonParser::extractString(line, "id") == orderId) {
             Order order;
-            order.id = id;
+            order.id = orderId;
             order.symbol = JsonParser::extractString(line, "symbol");
             std::string typeStr = JsonParser::extractString(line, "type");
             order.type = (typeStr == "BUY") ? OrderType::BUY : OrderType::SELL;
@@ -91,17 +89,13 @@ Order DatabaseManager::getOrderById(const std::string& orderId) {
             order.price = JsonParser::extractNumber(line, "price");
             order.status = static_cast<OrderStatus>(static_cast<int>(JsonParser::extractNumber(line, "status")));
             order.userId = JsonParser::extractString(line, "userId");
-            
-            file.close();
             return order;
         }
     }
-    
-    file.close();
-    return Order();
+    return std::nullopt;
 }
 
-std::vector<Order> DatabaseManager::getOrdersByUserId(const std::string& userId) {
+std::vector<Order> DatabaseManager::findOrdersByUserId(const std::string& userId) {
     if (!connected) return {};
     
     std::vector<Order> orders;
@@ -110,8 +104,7 @@ std::vector<Order> DatabaseManager::getOrdersByUserId(const std::string& userId)
     
     std::string line;
     while (std::getline(file, line)) {
-        std::string orderUserId = JsonParser::extractString(line, "userId");
-        if (orderUserId == userId) {
+        if (JsonParser::extractString(line, "userId") == userId) {
             Order order;
             order.id = JsonParser::extractString(line, "id");
             order.symbol = JsonParser::extractString(line, "symbol");
@@ -120,38 +113,31 @@ std::vector<Order> DatabaseManager::getOrdersByUserId(const std::string& userId)
             order.quantity = JsonParser::extractNumber(line, "quantity");
             order.price = JsonParser::extractNumber(line, "price");
             order.status = static_cast<OrderStatus>(static_cast<int>(JsonParser::extractNumber(line, "status")));
-            order.userId = orderUserId;
-            
+            order.userId = userId;
             orders.push_back(order);
         }
     }
-    
-    file.close();
     return orders;
 }
 
-bool DatabaseManager::updateOrderStatus(const std::string& orderId, OrderStatus status) {
+bool DatabaseManager::updateStatus(const std::string& orderId, OrderStatus status) {
     if (!connected) return false;
     
-    // Read all orders
     std::vector<std::string> allOrders;
     std::ifstream inFile("data/orders.json");
     if (!inFile.is_open()) return false;
     
-    std::string line;
-    bool updated = false;
+    std::string line; bool updated = false;
     while (std::getline(inFile, line)) {
-        std::string id = JsonParser::extractString(line, "id");
-        if (id == orderId) {
-            // Update the status in this order
+        if (JsonParser::extractString(line, "id") == orderId) {
             Order order;
-            order.id = id;
+            order.id = orderId;
             order.symbol = JsonParser::extractString(line, "symbol");
             std::string typeStr = JsonParser::extractString(line, "type");
             order.type = (typeStr == "BUY") ? OrderType::BUY : OrderType::SELL;
             order.quantity = JsonParser::extractNumber(line, "quantity");
             order.price = JsonParser::extractNumber(line, "price");
-            order.status = status; // Update status
+            order.status = status;
             order.userId = JsonParser::extractString(line, "userId");
             
             std::map<std::string, std::string> orderData;
@@ -166,89 +152,63 @@ bool DatabaseManager::updateOrderStatus(const std::string& orderId, OrderStatus 
             
             allOrders.push_back(JsonParser::createObject(orderData));
             updated = true;
-        } else {
-            allOrders.push_back(line);
-        }
+        } else { allOrders.push_back(line); }
     }
     inFile.close();
     
     if (updated) {
-        // Write back all orders
         std::ofstream outFile("data/orders.json", std::ios::trunc);
-        for (const auto& orderLine : allOrders) {
-            outFile << orderLine << "\n";
-        }
-        outFile.close();
+        for (auto &l : allOrders) outFile << l << "\n";
     }
-    
-    std::cout << "Order status updated: " << orderId << "\n";
+    if (updated) std::cout << "Order status updated: " << orderId << "\n";
     return updated;
 }
 
-bool DatabaseManager::saveUser(const User& user) {
-    if (!connected) return false;
+// ---- User repository implementation ----
+bool DatabaseManager::save(const User& user) {
+    if (!connected) return false; // Simplified for demo
     
     std::cout << "User saved: " << user.username << "\n";
     return true;
 }
 
-User DatabaseManager::getUserById(const std::string& userId) {
-    if (!connected) return User();
+std::optional<User> DatabaseManager::findUserById(const std::string& userId) {
+    if (!connected) return std::nullopt;
     
-    User user;
-    user.id = userId;
-    return user;
+    User user; user.id = userId; return user;
 }
 
-User DatabaseManager::getUserByUsername(const std::string& username) {
-    if (!connected) return User();
+std::optional<User> DatabaseManager::findByUsername(const std::string& username) {
+    if (!connected) return std::nullopt;
     
-    User user;
-    user.username = username;
-    return user;
+    User user; user.username = username; return user;
 }
 
-bool DatabaseManager::saveAsset(const std::string& userId, const Asset& asset) {
-    if (!connected) return false;
-    
-    std::cout << "Asset saved for user " << userId << ": " << asset.symbol << "\n";
-    return true;
+// ---- Asset repository implementation ----
+bool DatabaseManager::save(const std::string& userId, const Asset& asset) {
+    if (!connected) return false; std::cout << "Asset saved for user " << userId << ": " << asset.symbol << "\n"; return true;
 }
 
-std::vector<Asset> DatabaseManager::getAssetsByUserId(const std::string& userId) {
-    if (!connected) return {};
-    
-    std::vector<Asset> assets;
-    return assets;
+std::vector<Asset> DatabaseManager::findAssetsByUserId(const std::string& userId) {
+    if (!connected) return {}; (void)userId; return {};
 }
 
-bool DatabaseManager::updateAsset(const std::string& userId, const Asset& asset) {
-    if (!connected) return false;
-    
-    std::cout << "Asset updated for user " << userId << ": " << asset.symbol << "\n";
-    return true;
+bool DatabaseManager::update(const std::string& userId, const Asset& asset) {
+    if (!connected) return false; std::cout << "Asset updated for user " << userId << ": " << asset.symbol << "\n"; return true;
 }
 
-bool DatabaseManager::saveMarketData(const MarketDataPoint& data) {
-    if (!connected) return false;
-    
-    std::cout << "Market data saved: " << data.symbol << " @ " << data.price << "\n";
-    return true;
+// ---- Market data repository implementation ----
+bool DatabaseManager::save(const MarketDataPoint& data) {
+    if (!connected) return false; std::cout << "Market data saved: " << data.symbol << " @ " << data.price << "\n"; return true;
 }
 
-MarketDataPoint DatabaseManager::getLatestMarketData(const std::string& symbol) {
-    if (!connected) return MarketDataPoint();
-    
-    MarketDataPoint data;
-    data.symbol = symbol;
-    data.price = 100.0; // Simulated price
-    return data;
+MarketDataPoint DatabaseManager::latest(const std::string& symbol) {
+    if (!connected) return MarketDataPoint(); MarketDataPoint d; d.symbol = symbol; d.price = 100.0; return d;
 }
 
 std::string DatabaseManager::generateId() {
     static std::random_device rd;
     static std::mt19937 gen(rd());
     static std::uniform_int_distribution<> dis(1000000, 9999999);
-    
     return std::to_string(dis(gen));
 }

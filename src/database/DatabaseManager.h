@@ -23,23 +23,23 @@ public:
     void disconnect();
     bool isConnected() const;
 
-    // Order operations
+    // Order operations (implement IOrderRepository)
     bool save(const Order& order) override; // IOrderRepository
-    std::optional<Order> findById(const std::string& orderId) override;
-    std::vector<Order> findByUserId(const std::string& userId) override;
+    std::optional<Order> findOrderById(const std::string& orderId) override; // renamed to avoid clash
+    std::vector<Order> findOrdersByUserId(const std::string& userId) override; // renamed to avoid clash
     bool updateStatus(const std::string& orderId, OrderStatus status) override;
 
-    // User operations
+    // User operations (implement IUserRepository)
     bool save(const User& user) override; // IUserRepository
-    std::optional<User> findById(const std::string& userId) override; // IUserRepository
+    std::optional<User> findUserById(const std::string& userId) override; // renamed
     std::optional<User> findByUsername(const std::string& username) override;
 
-    // Portfolio operations
+    // Asset operations (implement IAssetRepository)
     bool save(const std::string& userId, const Asset& asset) override; // IAssetRepository
-    std::vector<Asset> findByUserId(const std::string& userId) override; // IAssetRepository conflict resolved by scope, will adjust names if needed
+    std::vector<Asset> findAssetsByUserId(const std::string& userId) override; // renamed
     bool update(const std::string& userId, const Asset& asset) override;
 
-    // Market data operations
+    // Market data operations (implement IMarketDataRepository)
     bool save(const MarketDataPoint& data) override; // IMarketDataRepository
     MarketDataPoint latest(const std::string& symbol) override;
 

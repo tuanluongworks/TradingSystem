@@ -136,6 +136,6 @@ double MarketData::generateRandomPrice(const std::string& symbol, double current
 
 void MarketData::saveToDatabase(const MarketDataPoint& data) {
     if (dbManager && dbManager->isConnected()) {
-        dbManager->saveMarketData(data);
+        dbManager->save(data);
     }
 }
