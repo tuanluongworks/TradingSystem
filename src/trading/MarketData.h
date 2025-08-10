@@ -4,10 +4,11 @@
 #include <memory>
 #include <mutex>
 #include <map>
+#include "../interfaces/IMarketDataService.h"
 
 class DatabaseManager;
 
-class MarketData {
+class MarketData : public IMarketDataService {
 private:
     std::map<std::string, MarketDataPoint> latestPrices;
     std::vector<MarketDataPoint> historicalData;
@@ -20,10 +21,10 @@ public:
     ~MarketData();
     
     void updatePrice(const std::string& symbol, double price, double volume = 0.0);
-    double getCurrentPrice(const std::string& symbol) const;
-    MarketDataPoint getLatestData(const std::string& symbol) const;
-    std::vector<MarketDataPoint> getHistoricalData(const std::string& symbol, int limit = 100) const;
-    std::vector<std::string> getAvailableSymbols() const;
+    double getCurrentPrice(const std::string& symbol) const override;
+    MarketDataPoint getLatestData(const std::string& symbol) const override;
+    std::vector<MarketDataPoint> getHistoricalData(const std::string& symbol, int limit = 100) const override;
+    std::vector<std::string> getAvailableSymbols() const override;
     
     void startSimulation();
     void stopSimulation();

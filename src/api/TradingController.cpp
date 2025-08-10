@@ -7,8 +7,8 @@
 #include <sstream>
 #include <iomanip>
 
-TradingController::TradingController(OrderManager* orderManager, Portfolio* portfolio, MarketData* marketData)
-    : orderManager(orderManager), portfolio(portfolio), marketData(marketData) {}
+TradingController::TradingController(IOrderService* orderService, IPortfolioService* portfolioService, IMarketDataService* marketDataService)
+    : orderService(orderService), portfolioService(portfolioService), marketDataService(marketDataService) {}
 
 std::string TradingController::createOrder(const std::string& orderDetails) {
         try {
@@ -21,7 +21,7 @@ std::string TradingController::createOrder(const std::string& orderDetails) {
             order.price = 150.0;
             order.userId = "user123";
             
-            std::string orderId = orderManager->createOrder(order);
+            std::string orderId = orderService->createOrder(order);
             
             std::ostringstream response;
             response << R"({"success": true, "orderId": ")" << orderId << R"(", "message": "Order created successfully"})";
@@ -36,7 +36,7 @@ std::string TradingController::createOrder(const std::string& orderDetails) {
 
 std::string TradingController::cancelOrder(const std::string& orderId) {
         try {
-            bool success = orderManager->cancelOrder(orderId);
+            bool success = orderService->cancelOrder(orderId);
             
             std::ostringstream response;
             if (success) {
@@ -55,8 +55,8 @@ std::string TradingController::cancelOrder(const std::string& orderId) {
 
 std::string TradingController::getPortfolio() {
         try {
-            const auto& assets = portfolio->getAssets();
-            double totalValue = portfolio->getTotalValue();
+            const auto& assets = portfolioService->getAssets();
+            double totalValue = portfolioService->getTotalValue();
             
             std::ostringstream response;
             response << std::fixed << std::setprecision(2);
@@ -83,7 +83,7 @@ std::string TradingController::getPortfolio() {
 
 std::string TradingController::getMarketData() {
         try {
-            auto symbols = marketData->getAvailableSymbols();
+            auto symbols = marketDataService->getAvailableSymbols();
             
             std::ostringstream response;
             response << std::fixed << std::setprecision(2);
@@ -92,7 +92,7 @@ std::string TradingController::getMarketData() {
             for (size_t i = 0; i < symbols.size(); ++i) {
                 if (i > 0) response << ", ";
                 const auto& symbol = symbols[i];
-                auto data = marketData->getLatestData(symbol);
+                auto data = marketDataService->getLatestData(symbol);
                 
                 response << R"({"symbol": ")" << symbol << R"(", )"
                         << R"("price": )" << data.price << R"(, )"

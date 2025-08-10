@@ -50,9 +50,9 @@ int main(int argc, char* argv[]) {
         }
         
         // Initialize trading components
-        auto orderManager = std::make_shared<OrderManager>(dbManager);
-        auto marketData = std::make_shared<MarketData>(dbManager);
-        auto portfolio = std::make_shared<Portfolio>("default_user", dbManager);
+        auto orderManager = std::make_shared<OrderManager>(dbManager); // IOrderService
+        auto marketData = std::make_shared<MarketData>(dbManager);     // IMarketDataService
+        auto portfolio = std::make_shared<Portfolio>("default_user", dbManager); // IPortfolioService
         
         // Start market data simulation
         marketData->startSimulation();

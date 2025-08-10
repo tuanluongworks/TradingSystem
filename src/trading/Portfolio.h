@@ -4,10 +4,11 @@
 #include <string>
 #include <memory>
 #include <mutex>
+#include "../interfaces/IPortfolioService.h"
 
 class DatabaseManager;
 
-class Portfolio {
+class Portfolio : public IPortfolioService {
 private:
     std::vector<Asset> assets;
     double totalValue;
@@ -21,11 +22,11 @@ public:
     
     void addAsset(const Asset& asset);
     bool removeAsset(const std::string& symbol);
-    const std::vector<Asset>& getAssets() const;
-    double getTotalValue() const;
+    const std::vector<Asset>& getAssets() const override;
+    double getTotalValue() const override;
     void updateAssetPrice(const std::string& symbol, double newPrice);
-    Asset getAsset(const std::string& symbol) const;
-    bool hasAsset(const std::string& symbol) const;
+    Asset getAsset(const std::string& symbol) const override;
+    bool hasAsset(const std::string& symbol) const override;
     void loadFromDatabase();
     
 private:

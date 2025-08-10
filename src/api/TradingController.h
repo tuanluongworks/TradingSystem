@@ -2,23 +2,21 @@
 #define TRADINGCONTROLLER_H
 
 #include <string>
-#include "OrderManager.h"
-#include "Portfolio.h"
-#include "MarketData.h"
+#include "../interfaces/IOrderService.h"
+#include "../interfaces/IPortfolioService.h"
+#include "../interfaces/IMarketDataService.h"
 
 class TradingController {
 public:
-    TradingController(OrderManager* orderManager, Portfolio* portfolio, MarketData* marketData);
-    
+    TradingController(IOrderService* orderService, IPortfolioService* portfolioService, IMarketDataService* marketDataService);
     std::string createOrder(const std::string& orderDetails);
     std::string cancelOrder(const std::string& orderId);
     std::string getPortfolio();
     std::string getMarketData();
-
 private:
-    OrderManager* orderManager;
-    Portfolio* portfolio;
-    MarketData* marketData;
+    IOrderService* orderService;
+    IPortfolioService* portfolioService;
+    IMarketDataService* marketDataService;
 };
 
 #endif // TRADINGCONTROLLER_H
