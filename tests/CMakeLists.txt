@@ -4,15 +4,10 @@ cmake_minimum_required(VERSION 3.20)
 add_executable(TradingSystemTests test_main.cpp)
 
 # Set include directories for tests
-target_include_directories(TradingSystemTests PRIVATE
-    ${CMAKE_SOURCE_DIR}/src
-    ${CMAKE_SOURCE_DIR}/src/common
-    ${CMAKE_SOURCE_DIR}/src/trading
-    ${CMAKE_SOURCE_DIR}/src/database
-)
+target_include_directories(TradingSystemTests PRIVATE ${CMAKE_SOURCE_DIR}/src)
 
-# Link against the library (not the executable)
-target_link_libraries(TradingSystemTests TradingSystemLib)
+# Link against modular libs
+target_link_libraries(TradingSystemTests PRIVATE serverlib api domain infra persistence)
 
 # Platform-specific libraries for tests
 if(WIN32)
