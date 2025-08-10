@@ -3,9 +3,13 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include "IOrderRepository.h"
+#include "IUserRepository.h"
+#include "IAssetRepository.h"
+#include "IMarketDataRepository.h"
 
 // Simple database interface without external dependencies
-class DatabaseManager {
+class DatabaseManager : public IOrderRepository, public IUserRepository, public IAssetRepository, public IMarketDataRepository {
 private:
     std::string dbPath;
     bool connected;
@@ -20,24 +24,24 @@ public:
     bool isConnected() const;
 
     // Order operations
-    bool saveOrder(const Order& order);
-    Order getOrderById(const std::string& orderId);
-    std::vector<Order> getOrdersByUserId(const std::string& userId);
-    bool updateOrderStatus(const std::string& orderId, OrderStatus status);
+    bool save(const Order& order) override; // IOrderRepository
+    std::optional<Order> findById(const std::string& orderId) override;
+    std::vector<Order> findByUserId(const std::string& userId) override;
+    bool updateStatus(const std::string& orderId, OrderStatus status) override;
 
     // User operations
-    bool saveUser(const User& user);
-    User getUserById(const std::string& userId);
-    User getUserByUsername(const std::string& username);
+    bool save(const User& user) override; // IUserRepository
+    std::optional<User> findById(const std::string& userId) override; // IUserRepository
+    std::optional<User> findByUsername(const std::string& username) override;
 
     // Portfolio operations
-    bool saveAsset(const std::string& userId, const Asset& asset);
-    std::vector<Asset> getAssetsByUserId(const std::string& userId);
-    bool updateAsset(const std::string& userId, const Asset& asset);
+    bool save(const std::string& userId, const Asset& asset) override; // IAssetRepository
+    std::vector<Asset> findByUserId(const std::string& userId) override; // IAssetRepository conflict resolved by scope, will adjust names if needed
+    bool update(const std::string& userId, const Asset& asset) override;
 
     // Market data operations
-    bool saveMarketData(const MarketDataPoint& data);
-    MarketDataPoint getLatestMarketData(const std::string& symbol);
+    bool save(const MarketDataPoint& data) override; // IMarketDataRepository
+    MarketDataPoint latest(const std::string& symbol) override;
 
 private:
     bool initializeTables();
