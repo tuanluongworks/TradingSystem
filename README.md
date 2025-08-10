@@ -205,6 +205,27 @@ You can specify which configuration to use when starting the application:
 ./TradingSystem config/production.ini
 ```
 
+## Development Tools
+
+Use the consolidated development tools script for common tasks:
+
+```bash
+# Test Docker build locally
+./dev-tools.sh test-docker
+
+# Check development environment setup
+./dev-tools.sh check-env
+
+# Clean up Docker containers and images
+./dev-tools.sh clean
+
+# View application logs (requires deployment)
+./dev-tools.sh logs
+
+# Show help
+./dev-tools.sh help
+```
+
 ## Testing
 
 Run the test suite:
@@ -213,6 +234,17 @@ Run the test suite:
 # or
 ./scripts/run_tests.bat # Windows
 ```
+
+## Deployment
+
+The application uses **GitHub Actions** for automated CI/CD deployment to Google Cloud Run:
+
+- **Automatic Deployment**: Every push to `main` branch triggers deployment
+- **Testing**: All code is tested before deployment
+- **Docker**: Application is containerized and pushed to Google Container Registry
+- **Cloud Run**: Deployed as a fully managed service with auto-scaling
+
+To deploy manually (not recommended), use the GitHub Actions workflow instead of local scripts.
 
 ## Security Features
 
