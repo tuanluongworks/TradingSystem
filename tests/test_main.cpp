@@ -85,6 +85,7 @@ private:
 #include "trading/test_Portfolio.cpp"
 #include "trading/test_MarketData.cpp"
 #include "trading/test_MatchingEngine.cpp"
+#include "trading/test_RiskEngine.cpp"
 
 int main(int argc, char** argv) {
     return TestRunner::getInstance().runAll();
