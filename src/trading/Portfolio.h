@@ -5,6 +5,7 @@
 #include <memory>
 #include <mutex>
 #include "../interfaces/IPortfolioService.h"
+#include "OrderEvents.h"
 
 class DatabaseManager;
 
@@ -28,6 +29,7 @@ public:
     Asset getAsset(const std::string& symbol) const override;
     bool hasAsset(const std::string& symbol) const override;
     void loadFromDatabase();
+    void onTradeExecution(const TradeExecutionEvent& exec);
     
 private:
     void calculateTotalValue();

@@ -9,6 +9,7 @@ struct NewOrderEvent { Order order; };
 struct CancelOrderEvent { std::string orderId; std::string userId; };
 struct ExecuteOrderEvent { std::string orderId; };
 struct MarketDataUpdateEvent { MarketDataPoint data; };
+struct TradeExecutionEvent { Order order; double executedPrice; double executedQuantity; };
 struct ShutdownEvent { };
 
-using TradingEvent = std::variant<NewOrderEvent, CancelOrderEvent, ExecuteOrderEvent, MarketDataUpdateEvent, ShutdownEvent>;
+using TradingEvent = std::variant<NewOrderEvent, CancelOrderEvent, ExecuteOrderEvent, MarketDataUpdateEvent, TradeExecutionEvent, ShutdownEvent>;

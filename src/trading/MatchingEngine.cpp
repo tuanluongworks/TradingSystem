@@ -19,8 +19,8 @@ void MatchingEngine::stop() {
 
 std::optional<Order> MatchingEngine::getOrder(const std::string& id) const {
     std::scoped_lock lock(stateMutex_);
-    auto it = orderBook_.find(id);
-    if (it != orderBook_.end()) return it->second;
+    auto it = orderIndex_.find(id);
+    if (it!=orderIndex_.end()) return it->second;
     return std::nullopt;
 }
 
@@ -38,34 +38,109 @@ void MatchingEngine::run() {
             else if constexpr (std::is_same_v<E, CancelOrderEvent>) onCancelOrder(e);
             else if constexpr (std::is_same_v<E, ExecuteOrderEvent>) onExecuteOrder(e);
             else if constexpr (std::is_same_v<E, MarketDataUpdateEvent>) onMarketData(e);
+            else if constexpr (std::is_same_v<E, TradeExecutionEvent>) onTradeExecution(e);
             else if constexpr (std::is_same_v<E, ShutdownEvent>) running_ = false;
         }, evt);
     }
 }
 
 void MatchingEngine::onNewOrder(const NewOrderEvent& ev) {
+    Order copy = ev.order;
     std::scoped_lock lock(stateMutex_);
-    orderBook_.emplace(ev.order.id, ev.order);
-    // future: match logic
+    orderIndex_.emplace(copy.id, copy);
+    match(orderIndex_[copy.id]);
 }
 
 void MatchingEngine::onCancelOrder(const CancelOrderEvent& ev) {
     std::scoped_lock lock(stateMutex_);
-    auto it = orderBook_.find(ev.orderId);
-    if (it != orderBook_.end()) {
+    auto it = orderIndex_.find(ev.orderId);
+    if (it!=orderIndex_.end()) {
         it->second.status = OrderStatus::CANCELLED;
     }
 }
 
 void MatchingEngine::onExecuteOrder(const ExecuteOrderEvent& ev) {
     std::scoped_lock lock(stateMutex_);
-    auto it = orderBook_.find(ev.orderId);
-    if (it != orderBook_.end()) {
+    auto it = orderIndex_.find(ev.orderId);
+    if (it!=orderIndex_.end()) {
         it->second.status = OrderStatus::FILLED;
     }
 }
 
 void MatchingEngine::onMarketData(const MarketDataUpdateEvent& ev) {
-    // placeholder: could update internal price levels or trigger matches
-    (void)ev; // suppress unused warning
+    (void)ev;
+}
+
+void MatchingEngine::onTradeExecution(const TradeExecutionEvent& ev) {
+    (void)ev;
+}
+
+void MatchingEngine::addToBook(const Order& o) {
+    if (o.type==OrderType::BUY) {
+        auto &lvl = bids_[o.price];
+        lvl.fifo.push_back({o});
+    } else {
+        auto &lvl = asks_[o.price];
+        lvl.fifo.push_back({o});
+    }
+}
+
+void MatchingEngine::match(Order& incoming) {
+    if (incoming.type==OrderType::BUY) {
+        // Try to match against lowest asks (asks_ ascending)
+        for (auto it = asks_.begin(); it != asks_.end() && incoming.quantity>0 && incoming.price >= it->first; ) {
+            auto &fifo = it->second.fifo;
+            while(!fifo.empty() && incoming.quantity>0) {
+                auto &resting = fifo.front().order;
+                double execQty = std::min(incoming.quantity, resting.quantity);
+                double execPrice = it->first;
+                incoming.quantity -= execQty;
+                resting.quantity -= execQty;
+
+                // Emit execution events
+                queue_.push(TradingEvent{TradeExecutionEvent{resting, execPrice, execQty}});
+                queue_.push(TradingEvent{TradeExecutionEvent{incoming, execPrice, execQty}});
+
+                if (resting.quantity==0) {
+                    orderIndex_[resting.id].status = OrderStatus::FILLED;
+                    fifo.pop_front();
+                } else {
+                    orderIndex_[resting.id].quantity = resting.quantity;
+                }
+            }
+            if (fifo.empty()) it = asks_.erase(it); else ++it;
+        }
+        if (incoming.quantity>0) {
+            addToBook(incoming);
+        } else {
+            orderIndex_[incoming.id].status = OrderStatus::FILLED;
+        }
+    } else { // SELL
+        for (auto it = bids_.begin(); it != bids_.end() && incoming.quantity>0 && incoming.price <= it->first; ) {
+            auto &fifo = it->second.fifo;
+            while(!fifo.empty() && incoming.quantity>0) {
+                auto &resting = fifo.front().order;
+                double execQty = std::min(incoming.quantity, resting.quantity);
+                double execPrice = it->first;
+                incoming.quantity -= execQty;
+                resting.quantity -= execQty;
+
+                queue_.push(TradingEvent{TradeExecutionEvent{resting, execPrice, execQty}});
+                queue_.push(TradingEvent{TradeExecutionEvent{incoming, execPrice, execQty}});
+
+                if (resting.quantity==0) {
+                    orderIndex_[resting.id].status = OrderStatus::FILLED;
+                    fifo.pop_front();
+                } else {
+                    orderIndex_[resting.id].quantity = resting.quantity;
+                }
+            }
+            if (fifo.empty()) it = bids_.erase(it); else ++it;
+        }
+        if (incoming.quantity>0) {
+            addToBook(incoming);
+        } else {
+            orderIndex_[incoming.id].status = OrderStatus::FILLED;
+        }
+    }
 }

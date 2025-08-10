@@ -123,3 +123,21 @@ void Portfolio::saveToDatabase() {
         }
     }
 }
+
+void Portfolio::onTradeExecution(const TradeExecutionEvent& exec) {
+    if (exec.order.userId != userId) return; // ignore other users
+    std::lock_guard<std::mutex> lock(portfolioMutex);
+    auto it = std::find_if(assets.begin(), assets.end(), [&](const Asset& a){ return a.symbol == exec.order.symbol; });
+    double signedQty = (exec.order.type==OrderType::BUY? exec.executedQuantity : -exec.executedQuantity);
+    if (it == assets.end()) {
+        if (signedQty > 0) { assets.push_back(Asset(exec.order.symbol, exec.executedQuantity, exec.executedPrice)); }
+    } else {
+        double newQty = it->quantity + signedQty;
+        if (newQty <= 0) { assets.erase(it); }
+        else {
+            if (signedQty > 0) { double totalCost = it->quantity * it->averageCost + exec.executedQuantity * exec.executedPrice; it->quantity = newQty; it->averageCost = totalCost / it->quantity; it->currentPrice = exec.executedPrice; }
+            else { it->quantity = newQty; it->currentPrice = exec.executedPrice; }
+        }
+    }
+    calculateTotalValue(); saveToDatabase();
+}
