@@ -8,6 +8,9 @@
 #include "trading/OrderManager.h"
 #include "trading/Portfolio.h"
 #include "trading/MarketData.h"
+#include "trading/MatchingEngine.h"
+#include "trading/OrderEvents.h"
+#include "infrastructure/LockFreeQueue.h"
 #include "database/DatabaseManager.h"
 #include "utils/Config.h"
 #include "utils/Logger.h"
@@ -16,6 +19,7 @@
 
 // Global server pointer for signal handling
 std::unique_ptr<HttpServer> g_server;
+SPSCQueue<TradingEvent>* g_orderEventQueue = nullptr; // global pointer used by managers
 
 void signalHandler(int signum) {
     std::cout << "\nInterrupt signal (" << signum << ") received.\n";
@@ -279,6 +283,11 @@ int main(int argc, char* argv[]) {
         g_server = std::make_unique<HttpServer>(port);
         g_server->setRouter(router);
         
+        static SPSCQueue<TradingEvent> eventQueue(1024); // power-of-two capacity
+        g_orderEventQueue = &eventQueue;
+        MatchingEngine engine(eventQueue);
+        engine.start();
+        
         std::cout << "Trading System Server starting on port " << port << "..." << std::endl;
         std::cout << "Press Ctrl+C to stop the server" << std::endl;
         
@@ -290,6 +299,7 @@ int main(int argc, char* argv[]) {
         }
         
         // Cleanup
+        engine.stop();
         marketData->stopSimulation();
         dbManager->disconnect();
         

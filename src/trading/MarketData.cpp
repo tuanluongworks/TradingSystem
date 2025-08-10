@@ -1,10 +1,14 @@
 #include "MarketData.h"
 #include "DatabaseManager.h"
+#include "OrderEvents.h"
+#include "../infrastructure/LockFreeQueue.h"
 #include <random>
 #include <thread>
 #include <chrono>
 #include <iostream>
 #include <algorithm>
+
+extern SPSCQueue<TradingEvent>* g_orderEventQueue;
 
 MarketData::MarketData(std::shared_ptr<DatabaseManager> db)
     : dbManager(db), isSimulating(false) {
@@ -26,11 +30,13 @@ MarketData::~MarketData() {
 void MarketData::updatePrice(const std::string& symbol, double price, double volume) {
     std::lock_guard<std::mutex> lock(dataMutex);
     
-    MarketDataPoint dataPoint(symbol, price, volume);
-    latestPrices[symbol] = dataPoint;
-    historicalData.push_back(dataPoint);
+    MarketDataPoint point{symbol, price, volume};
+    latestPrices[symbol] = point;
+    historicalData.push_back(point);
     
-    saveToDatabase(dataPoint);
+    saveToDatabase(point);
+    
+    if (g_orderEventQueue) { g_orderEventQueue->push(TradingEvent{MarketDataUpdateEvent{point}}); }
     
     std::cout << "Price updated: " << symbol << " -> $" << price << "\n";
 }

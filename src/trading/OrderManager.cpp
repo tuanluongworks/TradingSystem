@@ -5,6 +5,10 @@
 #include <stdexcept>
 #include <random>
 #include <iostream>
+#include "OrderEvents.h"
+#include "../infrastructure/LockFreeQueue.h"
+
+extern SPSCQueue<TradingEvent>* g_orderEventQueue; // provided by composition root
 
 OrderManager::OrderManager(std::shared_ptr<DatabaseManager> db) : dbManager(db) {}
 
@@ -28,6 +32,10 @@ std::string OrderManager::createOrder(const Order& order) {
         dbManager->saveOrder(newOrder);
     }
     
+    if (g_orderEventQueue) {
+        g_orderEventQueue->push(TradingEvent{NewOrderEvent{newOrder}});
+    }
+    
     std::cout << "Order created: " << newOrder.id << " for " << newOrder.quantity 
               << " shares of " << newOrder.symbol << "\n";
     
@@ -47,6 +55,10 @@ bool OrderManager::cancelOrder(const std::string& orderId) {
         
         if (dbManager && dbManager->isConnected()) {
             dbManager->updateOrderStatus(orderId, OrderStatus::CANCELLED);
+        } 
+        
+        if (g_orderEventQueue) {
+            g_orderEventQueue->push(TradingEvent{CancelOrderEvent{orderId, it->userId}});
         }
         
         std::cout << "Order cancelled: " << orderId << "\n";
@@ -122,6 +134,10 @@ bool OrderManager::executeOrder(const std::string& orderId) {
         
         if (dbManager && dbManager->isConnected()) {
             dbManager->updateOrderStatus(orderId, OrderStatus::FILLED);
+        } 
+        
+        if (g_orderEventQueue) {
+            g_orderEventQueue->push(TradingEvent{ExecuteOrderEvent{orderId}});
         }
         
         std::cout << "Order executed: " << orderId << "\n";
