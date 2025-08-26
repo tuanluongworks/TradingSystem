@@ -40,7 +40,7 @@ private:
 
     SPSCQueue<TradingEvent>& queue_;
     std::atomic<bool> running_{false};
-    std::jthread thread_;
+    std::thread thread_;
     mutable std::mutex stateMutex_;
     std::unordered_map<std::string, Order> orderIndex_;
     // Price-time priority books: bids descending, asks ascending

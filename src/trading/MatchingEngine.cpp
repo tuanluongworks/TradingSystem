@@ -8,7 +8,7 @@ MatchingEngine::~MatchingEngine() { stop(); }
 
 void MatchingEngine::start() {
     if (running_.exchange(true)) return;
-    thread_ = std::jthread([this]{ run(); });
+    thread_ = std::thread([this]{ run(); });
 }
 
 void MatchingEngine::stop() {
