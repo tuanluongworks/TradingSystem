@@ -1,8 +1,8 @@
 #pragma once
 
-#include "../../contracts/trading_engine_api.hpp"
-#include "../models/market_tick.hpp"
-#include "../messaging/message_queue.hpp"
+#include "contracts/trading_engine_api.hpp"
+#include "core/models/market_tick.hpp"
+#include "core/messaging/message_queue.hpp"
 #include "websocket_connector.hpp"
 
 #include <memory>

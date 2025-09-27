@@ -1,13 +1,13 @@
 #pragma once
 
-#include "../../contracts/trading_engine_api.hpp"
+#include "contracts/trading_engine_api.hpp"
 #include "../models/order.hpp"
 #include "../models/trade.hpp"
 #include "../models/position.hpp"
 #include "../models/instrument.hpp"
 #include "../risk/risk_manager.hpp"
 #include "../messaging/message_queue.hpp"
-#include "../../infrastructure/persistence/sqlite_service.hpp"
+#include "infrastructure/persistence/sqlite_service.hpp"
 
 #include <memory>
 #include <string>

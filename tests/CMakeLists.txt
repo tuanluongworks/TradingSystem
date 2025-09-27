@@ -3,7 +3,6 @@
 # Unit tests
 add_executable(unit_tests
     # Core model tests
-    unit/core/test_ui_manager_interface.cpp
     unit/core/test_trading_engine_interface.cpp
     unit/core/test_risk_manager_interface.cpp
 

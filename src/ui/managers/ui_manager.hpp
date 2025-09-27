@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../contracts/ui_interface.hpp"
+#include "contracts/ui_interface.hpp"
 #include "../rendering/opengl_context.hpp"
 #include "../components/market_data_panel.hpp"
 #include "../components/order_entry_panel.hpp"

@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../../contracts/trading_engine_api.hpp"
+#include "contracts/trading_engine_api.hpp"
 #include <sqlite_orm/sqlite_orm.h>
 #include <memory>
 #include <string>

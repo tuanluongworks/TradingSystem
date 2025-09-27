@@ -1,10 +1,10 @@
 #pragma once
 
-#include "../../contracts/trading_engine_api.hpp"
+#include "contracts/trading_engine_api.hpp"
 #include "../models/risk_limit.hpp"
 #include "../models/position.hpp"
 #include "../models/order.hpp"
-#include "../../utils/config.hpp"
+#include "utils/config.hpp"
 
 #include <memory>
 #include <string>
