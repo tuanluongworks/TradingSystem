@@ -1,8 +1,8 @@
 
-# Implementation Plan: [FEATURE]
+# Implementation Plan: C++ Trading System
 
-**Branch**: `[###-feature-name]` | **Date**: [DATE] | **Spec**: [link]
-**Input**: Feature specification from `/specs/[###-feature-name]/spec.md`
+**Branch**: `001-c-trading-system` | **Date**: 2025-09-27 | **Spec**: spec.md
+**Input**: Feature specification from `/Users/tuanluong/Documents/GithubProjects/TradingSystem/specs/001-c-trading-system/spec.md`
 
 ## Execution Flow (/plan command scope)
 ```
@@ -31,23 +31,47 @@
 - Phase 3-4: Implementation execution (manual or via tools)
 
 ## Summary
-[Extract from feature spec: primary requirement + technical approach from research]
+Build a desktop application for manual trading featuring a real-time UI connected to a high-performance C++ backend that manages market data, order execution, and position tracking. The system will provide real-time market data visualization, order entry capabilities, position tracking, and trade history with comprehensive risk management and persistence.
 
 ## Technical Context
-**Language/Version**: [e.g., Python 3.11, Swift 5.9, Rust 1.75 or NEEDS CLARIFICATION]  
-**Primary Dependencies**: [e.g., FastAPI, UIKit, LLVM or NEEDS CLARIFICATION]  
-**Storage**: [if applicable, e.g., PostgreSQL, CoreData, files or N/A]  
-**Testing**: [e.g., pytest, XCTest, cargo test or NEEDS CLARIFICATION]  
-**Target Platform**: [e.g., Linux server, iOS 15+, WASM or NEEDS CLARIFICATION]
-**Project Type**: [single/web/mobile - determines source structure]  
-**Performance Goals**: [domain-specific, e.g., 1000 req/s, 10k lines/sec, 60 fps or NEEDS CLARIFICATION]  
-**Constraints**: [domain-specific, e.g., <200ms p95, <100MB memory, offline-capable or NEEDS CLARIFICATION]  
-**Scale/Scope**: [domain-specific, e.g., 10k users, 1M LOC, 50 screens or NEEDS CLARIFICATION]
+**Language/Version**: C++20 (modern features for performance and safety)
+**Primary Dependencies**: Dear ImGui (UI), OpenGL (rendering), Boost.Beast (WebSocket), sqlite_orm (database), GoogleTest (testing)
+**Storage**: SQLite3 with backup file logging for trade persistence and audit trail
+**Testing**: GoogleTest framework with comprehensive coverage for all trading logic and risk management
+**Target Platform**: Cross-platform desktop (Windows, macOS, Linux)
+**Project Type**: Single desktop application with three-tier modular architecture
+**Performance Goals**: Low-latency order execution (<1ms), real-time UI updates (60 fps), high-throughput market data processing
+**Constraints**: Thread-safe operations, graceful error handling, position limit enforcement, data integrity requirements
+**Scale/Scope**: Single-user desktop application, moderate codebase (~10k LOC), multi-threaded architecture with async message queues
 
 ## Constitution Check
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-[Gates determined based on constitution file]
+**Performance First**: ✅ PASS
+- C++20 with modern features for optimal performance
+- Low-latency design (<1ms order execution target)
+- Minimal memory allocations via smart pointers and efficient algorithms
+
+**Robustness and Reliability**: ✅ PASS
+- Exception handling throughout trading logic
+- Data integrity via SQLite with backup logging
+- Graceful handling of network failures and reconnection
+
+**Modularity and Separation of Concerns**: ✅ PASS
+- Three-tier architecture: UI Layer, Core Logic Layer, Infrastructure Layer
+- Clear interfaces between components via thread-safe message queues
+- Independent testing and maintenance capabilities
+
+**Testing Excellence**: ✅ PASS
+- GoogleTest framework mandated for all backend logic
+- Comprehensive test coverage required for trading logic and risk management
+- TDD practices to be followed throughout implementation
+
+**Code Quality and Standards**: ✅ PASS
+- Google C++ Style Guide compliance required
+- C++20 standard enforced
+- Smart pointers mandated for concurrent code
+- CMake build system with proper dependency management
 
 ## Project Structure
 
@@ -63,50 +87,37 @@ specs/[###-feature]/
 ```
 
 ### Source Code (repository root)
-<!--
-  ACTION REQUIRED: Replace the placeholder tree below with the concrete layout
-  for this feature. Delete unused options and expand the chosen structure with
-  real paths (e.g., apps/admin, packages/something). The delivered plan must
-  not include Option labels.
--->
 ```
-# [REMOVE IF UNUSED] Option 1: Single project (DEFAULT)
 src/
-├── models/
-├── services/
-├── cli/
-└── lib/
+├── core/                    # Core trading logic and entities
+│   ├── models/             # Data models (Order, Position, Trade, Instrument)
+│   ├── engine/             # Trading engine and order matching
+│   ├── risk/               # Risk management and validation
+│   └── messaging/          # Thread-safe message queues
+├── infrastructure/         # External integrations and services
+│   ├── market_data/        # WebSocket market data connection
+│   ├── persistence/        # Database and file logging
+│   └── networking/         # Network utilities and connection management
+├── ui/                     # User interface layer
+│   ├── components/         # ImGui UI components
+│   ├── managers/           # UI state management
+│   └── rendering/          # OpenGL rendering utilities
+└── utils/                  # Common utilities and helpers
 
 tests/
-├── contract/
-├── integration/
-└── unit/
+├── unit/                   # Unit tests for individual components
+│   ├── core/              # Core logic tests
+│   ├── infrastructure/    # Infrastructure layer tests
+│   └── ui/                # UI component tests
+├── integration/           # Integration tests between components
+└── performance/           # Performance and latency benchmarks
 
-# [REMOVE IF UNUSED] Option 2: Web application (when "frontend" + "backend" detected)
-backend/
-├── src/
-│   ├── models/
-│   ├── services/
-│   └── api/
-└── tests/
-
-frontend/
-├── src/
-│   ├── components/
-│   ├── pages/
-│   └── services/
-└── tests/
-
-# [REMOVE IF UNUSED] Option 3: Mobile + API (when "iOS/Android" detected)
-api/
-└── [same as backend above]
-
-ios/ or android/
-└── [platform-specific structure: feature modules, UI flows, platform tests]
+include/                   # Public headers
+external/                  # Third-party dependencies
+cmake/                     # CMake configuration files
 ```
 
-**Structure Decision**: [Document the selected structure and reference the real
-directories captured above]
+**Structure Decision**: Single desktop application with modular three-tier architecture separating UI, core trading logic, and infrastructure concerns. Each layer communicates via thread-safe message queues to enable independent testing and maintenance.
 
 ## Phase 0: Outline & Research
 1. **Extract unknowns from Technical Context** above:
@@ -166,19 +177,60 @@ directories captured above]
 *This section describes what the /tasks command will do - DO NOT execute during /plan*
 
 **Task Generation Strategy**:
-- Load `.specify/templates/tasks-template.md` as base
-- Generate tasks from Phase 1 design docs (contracts, data model, quickstart)
-- Each contract → contract test task [P]
-- Each entity → model creation task [P] 
-- Each user story → integration test task
-- Implementation tasks to make tests pass
+- Load `.specify/templates/tasks-template.md` as base template
+- Generate foundational tasks from data model entities (Instrument, Order, Position, Trade, MarketTick, RiskLimit)
+- Generate contract implementation tasks from `/contracts/` API interfaces
+- Generate integration tests from quickstart validation scenarios
+- Generate infrastructure tasks for threading, messaging, and persistence
+- Generate UI component tasks from UI interface contracts
+
+**Specific Task Categories**:
+
+1. **Foundation Tasks [P]** (Parallel execution):
+   - Core entity model classes (6 tasks)
+   - Exception handling and logging utilities
+   - Thread-safe message queue implementation
+   - Configuration management system
+
+2. **Infrastructure Tasks** (Sequential dependencies):
+   - Market data connector (WebSocket + JSON parsing)
+   - Database persistence service with SQLite
+   - Risk manager implementation
+   - Trading engine simulator
+
+3. **UI Tasks** (Dependent on core models):
+   - ImGui panel implementations (4 main panels)
+   - UI state management and event handling
+   - OpenGL rendering context setup
+   - UI-to-backend message integration
+
+4. **Integration Tasks** (Final validation):
+   - End-to-end test scenarios from quickstart.md
+   - Performance benchmarking tests
+   - Error condition handling tests
+   - Configuration validation tests
 
 **Ordering Strategy**:
-- TDD order: Tests before implementation 
-- Dependency order: Models before services before UI
-- Mark [P] for parallel execution (independent files)
+- **Phase 1**: Foundation and core models (can run in parallel)
+- **Phase 2**: Infrastructure services (sequential, depends on models)
+- **Phase 3**: UI components (depends on infrastructure APIs)
+- **Phase 4**: Integration and validation (depends on all components)
+- Mark [P] for tasks that can execute in parallel within each phase
 
-**Estimated Output**: 25-30 numbered, ordered tasks in tasks.md
+**Dependency Management**:
+- Each task specifies prerequisites from previous phases
+- Test tasks always precede implementation tasks (TDD approach)
+- Interface contracts must be implemented before dependent components
+- Database schema creation before persistence service
+- Message queue implementation before cross-layer communication
+
+**Estimated Output**: 35-40 numbered, dependency-ordered tasks in tasks.md
+
+**Testing Strategy Integration**:
+- Every core component gets unit test task
+- Contract interface compliance tests for all implementations
+- Integration tests for multi-component workflows
+- Performance tests for latency-critical paths
 
 **IMPORTANT**: This phase is executed by the /tasks command, NOT by /plan
 
@@ -202,18 +254,18 @@ directories captured above]
 *This checklist is updated during execution flow*
 
 **Phase Status**:
-- [ ] Phase 0: Research complete (/plan command)
-- [ ] Phase 1: Design complete (/plan command)
-- [ ] Phase 2: Task planning complete (/plan command - describe approach only)
+- [x] Phase 0: Research complete (/plan command)
+- [x] Phase 1: Design complete (/plan command)
+- [x] Phase 2: Task planning complete (/plan command - describe approach only)
 - [ ] Phase 3: Tasks generated (/tasks command)
 - [ ] Phase 4: Implementation complete
 - [ ] Phase 5: Validation passed
 
 **Gate Status**:
-- [ ] Initial Constitution Check: PASS
-- [ ] Post-Design Constitution Check: PASS
-- [ ] All NEEDS CLARIFICATION resolved
-- [ ] Complexity deviations documented
+- [x] Initial Constitution Check: PASS
+- [x] Post-Design Constitution Check: PASS
+- [x] All NEEDS CLARIFICATION resolved
+- [x] Complexity deviations documented (none required)
 
 ---
 *Based on Constitution v2.1.1 - See `/memory/constitution.md`*
