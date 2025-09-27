@@ -59,17 +59,17 @@
 - [X] T023 SQLite persistence service with sqlite_orm in /src/infrastructure/persistence/sqlite_service.hpp and .cpp
 - [X] T024 Configuration management system in /src/utils/config.hpp and /src/utils/config.cpp
 
-## Phase 3.5: Core Trading Engine
+## Phase 3.5: Core Trading Engine ✅ COMPLETED
 
 - [X] T025 Risk Manager implementation with pre-trade validation in /src/core/risk/risk_manager.hpp and .cpp
-- [ ] T026 Trading Engine with order lifecycle management in /src/core/engine/trading_engine.hpp and .cpp
-- [ ] T027 Market Data Provider with subscription management in /src/infrastructure/market_data/market_data_provider.hpp and .cpp
-- [ ] T028 Order execution simulator for development mode in /src/core/engine/execution_simulator.hpp and .cpp
+- [X] T026 Trading Engine with order lifecycle management in /src/core/engine/trading_engine.hpp and .cpp
+- [X] T027 Market Data Provider with subscription management in /src/infrastructure/market_data/market_data_provider.hpp and .cpp
+- [X] T028 Order execution simulator for development mode in /src/core/engine/execution_simulator.hpp and .cpp
 
-## Phase 3.6: UI Layer Implementation
+## Phase 3.6: UI Layer Implementation ⏳ IN PROGRESS
 
-- [ ] T029 OpenGL rendering context setup with Dear ImGui in /src/ui/rendering/opengl_context.hpp and .cpp
-- [ ] T030 UI Manager main application loop in /src/ui/managers/ui_manager.hpp and .cpp
+- [X] T029 OpenGL rendering context setup with Dear ImGui in /src/ui/rendering/opengl_context.hpp and .cpp
+- [X] T030 UI Manager main application loop in /src/ui/managers/ui_manager.hpp and .cpp
 - [ ] T031 Market Data Panel ImGui implementation in /src/ui/components/market_data_panel.hpp and .cpp
 - [ ] T032 Order Entry Panel with form validation in /src/ui/components/order_entry_panel.hpp and .cpp
 - [ ] T033 Positions Panel with P&L display in /src/ui/components/positions_panel.hpp and .cpp
