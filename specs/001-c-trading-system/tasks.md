@@ -56,12 +56,12 @@
 - [X] T020 Thread-safe MessageQueue template implementation in /src/core/messaging/message_queue.hpp
 - [X] T021 Exception handling and logging utilities in /src/utils/logging.hpp and /src/utils/exceptions.hpp
 - [X] T022 WebSocket market data connector with Boost.Beast in /src/infrastructure/market_data/websocket_connector.hpp and .cpp
-- [ ] T023 SQLite persistence service with sqlite_orm in /src/infrastructure/persistence/sqlite_service.hpp and .cpp
-- [ ] T024 Configuration management system in /src/utils/config.hpp and /src/utils/config.cpp
+- [X] T023 SQLite persistence service with sqlite_orm in /src/infrastructure/persistence/sqlite_service.hpp and .cpp
+- [X] T024 Configuration management system in /src/utils/config.hpp and /src/utils/config.cpp
 
 ## Phase 3.5: Core Trading Engine
 
-- [ ] T025 Risk Manager implementation with pre-trade validation in /src/core/risk/risk_manager.hpp and .cpp
+- [X] T025 Risk Manager implementation with pre-trade validation in /src/core/risk/risk_manager.hpp and .cpp
 - [ ] T026 Trading Engine with order lifecycle management in /src/core/engine/trading_engine.hpp and .cpp
 - [ ] T027 Market Data Provider with subscription management in /src/infrastructure/market_data/market_data_provider.hpp and .cpp
 - [ ] T028 Order execution simulator for development mode in /src/core/engine/execution_simulator.hpp and .cpp

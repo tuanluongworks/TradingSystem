@@ -13,6 +13,26 @@
 
 namespace trading {
 
+// Enums
+enum class OrderSide {
+    BUY,
+    SELL
+};
+
+enum class OrderType {
+    MARKET,
+    LIMIT
+};
+
+enum class OrderStatus {
+    NEW,              // Just created, not yet sent
+    ACCEPTED,         // Accepted by execution engine
+    PARTIALLY_FILLED, // Some quantity executed
+    FILLED,           // Completely executed
+    CANCELED,         // Canceled by user
+    REJECTED          // Rejected by risk management or engine
+};
+
 // Forward declarations
 class Order;
 class Trade;
