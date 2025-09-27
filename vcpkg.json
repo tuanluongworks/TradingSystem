@@ -1,0 +1,62 @@
+{
+  "name": "trading-system",
+  "version-string": "1.0.0",
+  "description": "C++ Desktop Trading System with Dear ImGui UI",
+  "homepage": "https://github.com/user/TradingSystem",
+  "supports": "windows | osx | linux",
+  "dependencies": [
+    {
+      "name": "boost-beast",
+      "version>=": "1.82.0"
+    },
+    {
+      "name": "boost-system",
+      "version>=": "1.82.0"
+    },
+    {
+      "name": "sqlite3",
+      "version>=": "3.42.0"
+    },
+    {
+      "name": "sqlite-orm",
+      "version>=": "1.8.2"
+    },
+    {
+      "name": "imgui",
+      "version>=": "1.89.6",
+      "features": [
+        "opengl3-binding",
+        "glfw-binding"
+      ]
+    },
+    {
+      "name": "opengl",
+      "platform": "!uwp"
+    },
+    {
+      "name": "glfw3",
+      "version>=": "3.3.8"
+    },
+    {
+      "name": "nlohmann-json",
+      "version>=": "3.11.2"
+    },
+    {
+      "name": "spdlog",
+      "version>=": "1.12.0"
+    },
+    {
+      "name": "gtest",
+      "version>=": "1.13.0"
+    }
+  ],
+  "builtin-baseline": "a42af01b72c28a8e1d7b48107b33e4f286a55ef6",
+  "features": {
+    "tests": {
+      "description": "Build with testing support",
+      "dependencies": [
+        "gtest"
+      ]
+    }
+  }
+}
