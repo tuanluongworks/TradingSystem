@@ -1,0 +1,126 @@
+# Build directories
+build*/
+out/
+cmake-build-*/
+cmake*/
+
+# vcpkg artifacts
+vcpkg_installed/
+vcpkg/downloads/
+vcpkg/packages/
+vcpkg/buildtrees/
+
+# Compiler artifacts
+*.o
+*.obj
+*.so
+*.dylib
+*.dll
+*.a
+*.lib
+*.exe
+*.pdb
+*.ilk
+*.exp
+
+# Runtime data
+data/backups/
+data/orders/
+data/trades/
+data/positions/
+data/market_data/
+data/*.db
+data/*.db-journal
+data/*.db-wal
+data/*.db-shm
+
+# Logs
+logs/
+*.log
+
+# Generated config
+config/generated/
+config/*.json.backup
+
+# IDE/Editor files
+.vscode/
+.vs/
+*.swp
+*.swo
+*~
+.idea/
+*.user
+*.suo
+*.ncb
+*.aps
+*.plg
+*.opt
+*.clw
+*.tags
+*.vcxproj.user
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Temporary files
+*.tmp
+*.temp
+*.cache
+*.pid
+*.lock
+
+# Coverage reports
+coverage/
+*.gcov
+*.gcda
+*.gcno
+
+# Memory leak reports
+*.memcheck
+valgrind-*.txt
+
+# Performance profiling
+*.prof
+perf.data*
+gmon.out
+
+# Documentation generated files
+docs/html/
+docs/latex/
+Doxyfile.bak
+
+# Package managers
+conan/
+.conan/
+
+# Test artifacts
+test_results/
+*.xml
+Testing/
+
+# Environment files
+.env
+.env.local
+.env.production
+.env.test
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Core dumps
+core
+core.*
+
+CLAUDE.md
+.claude
+.specify
+specs
