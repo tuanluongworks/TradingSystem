@@ -68,6 +68,15 @@ When creating this spec from a user prompt:
 
 ---
 
+## Clarifications
+
+### Session 2025-09-27
+- Q: What are the specific position limits that risk management should enforce? → A: Quantity/shares per instrument
+- Q: How should the system handle partial order fills? → A: Automatically accept partial fills and leave remainder working
+- Q: Is this a single-user or multi-user trading system? → A: Single-user desktop application (no authentication needed)
+- Q: What should happen when market data connection is lost? → A: Disable trading, show status, reconnect
+- Q: What should happen when the database is unavailable for trade logging? → A: Log to file, then sync
+
 ## User Scenarios & Testing
 
 ### Primary User Story
@@ -81,11 +90,11 @@ A trader opens the trading application to monitor market movements and execute t
 5. **Given** the trader is monitoring their portfolio, **When** they view the positions panel, **Then** they see current open positions with profit/loss calculations
 
 ### Edge Cases
-- What happens when market data connection is lost or delayed?
-- How does the system handle partial order fills?
+- When market data connection is lost: system disables order entry, shows connection status, and automatically attempts reconnection
+- When partial order fills occur: system automatically accepts partial fills and keeps remaining quantity as working order
+- When database is unavailable: system logs trades to backup file and syncs when database connection is restored
 - What happens when the trader attempts to place an order with invalid parameters (negative quantity, unknown instrument)?
 - How does the system behave when position limits are reached?
-- What happens when the database is unavailable for trade logging?
 
 ## Requirements
 
@@ -93,16 +102,18 @@ A trader opens the trading application to monitor market movements and execute t
 - **FR-001**: System MUST display real-time market data including symbol, bid price, ask price, and last traded price for subscribed instruments
 - **FR-002**: System MUST allow traders to place buy and sell orders with specified instrument, quantity, and order type (market or limit)
 - **FR-003**: System MUST track and display current open positions showing instrument, quantity, average price, and current profit/loss
-- **FR-004**: System MUST show working orders with their current status (new, accepted, partially filled)
+- **FR-004**: System MUST show working orders with their current status (new, accepted, partially filled) and remaining quantity
 - **FR-005**: System MUST maintain a history of executed trades showing timestamp, instrument, side, quantity, and price
 - **FR-006**: System MUST perform pre-trade risk validation including position limit checks before accepting orders
 - **FR-007**: System MUST reject orders that would cause position limits to be exceeded
 - **FR-008**: System MUST persist all executed trades to local storage for audit and recovery purposes
 - **FR-009**: System MUST support order lifecycle management with states: new, accepted, filled, canceled
 - **FR-010**: System MUST allow traders to cancel working orders that have not yet been filled
-- **FR-011**: System MUST [NEEDS CLARIFICATION: authentication/user management requirements not specified - single user or multi-user system?]
-- **FR-012**: System MUST [NEEDS CLARIFICATION: what are the specific position limits - dollar amount, quantity, percentage of portfolio?]
-- **FR-013**: System MUST [NEEDS CLARIFICATION: how should the system handle partial order fills - automatically or require trader confirmation?]
+- **FR-011**: System MUST operate as a single-user desktop application without requiring authentication or user management
+- **FR-012**: System MUST enforce position limits based on maximum quantity/shares per instrument
+- **FR-013**: System MUST automatically accept partial order fills and keep the remaining quantity working as an active order
+- **FR-014**: System MUST disable order entry when market data connection is lost, display connection status, and automatically attempt to reconnect
+- **FR-015**: System MUST log executed trades to backup file when database is unavailable and synchronize to database when connection is restored
 
 ### Key Entities
 - **Instrument**: Financial security that can be traded, identified by symbol with current market prices
@@ -110,7 +121,7 @@ A trader opens the trading application to monitor market movements and execute t
 - **Position**: Current holding in an instrument showing net quantity and average price
 - **Trade**: Executed transaction record showing all order fulfillment details
 - **Market Data**: Real-time price information including bid, ask, and last traded price for instruments
-- **Risk Limits**: Position constraints that govern maximum allowable exposure per instrument
+- **Risk Limits**: Position constraints that govern maximum allowable quantity/shares per instrument
 
 ---
 
