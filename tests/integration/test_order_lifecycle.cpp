@@ -17,21 +17,20 @@ class OrderLifecycleTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Initialize test configuration
-        config_ = std::make_shared<Config>();
-        config_->set("database.path", ":memory:"); // In-memory database for testing
-        config_->set("risk.max_position_size", 10000.0);
-        config_->set("risk.max_order_size", 1000.0);
+        config_ = std::make_shared<TradingSystemConfig>();
+        config_->persistence.database_path = ":memory:"; // In-memory database for testing
+        config_->risk_management.max_position_size = 10000.0;
+        config_->risk_management.max_order_size = 1000.0;
 
         // Initialize persistence service
-        persistence_ = std::make_shared<PersistenceService>(config_);
+        persistence_ = std::make_shared<SQLiteService>(config_->persistence.database_path);
         ASSERT_TRUE(persistence_->initialize());
 
         // Initialize risk manager
-        risk_manager_ = std::make_shared<RiskManager>(config_);
-        ASSERT_TRUE(risk_manager_->initialize());
+        risk_manager_ = std::make_shared<RiskManager>(config_->risk_management);
 
         // Initialize trading engine
-        trading_engine_ = std::make_shared<TradingEngine>(config_, persistence_, risk_manager_);
+        trading_engine_ = std::make_shared<TradingEngine>(risk_manager_, persistence_);
         ASSERT_TRUE(trading_engine_->initialize());
 
         // Set up test instrument
@@ -44,29 +43,22 @@ protected:
             trading_engine_->shutdown();
         }
         if (persistence_) {
-            persistence_->shutdown();
+            persistence_->close();
         }
     }
 
     void setup_test_instrument() {
         // Create test instrument
-        auto instrument = std::make_shared<Instrument>();
-        instrument->symbol = test_symbol_;
-        instrument->name = "Apple Inc";
-        instrument->type = InstrumentType::STOCK;
-        instrument->tick_size = 0.01;
-        instrument->lot_size = 1;
-        instrument->is_active = true;
-        instrument->bid_price = 150.00;
-        instrument->ask_price = 150.05;
-        instrument->last_price = 150.02;
+        auto instrument = std::make_shared<Instrument>(test_symbol_, "Apple Inc", InstrumentType::STOCK, 0.01, 1);
+        instrument->set_active(true);
+        instrument->update_market_data(150.00, 150.05, 150.02);
 
         // Add instrument to system (this would normally be done by market data provider)
         // For testing, we'll assume the instrument is available
     }
 
-    std::shared_ptr<Config> config_;
-    std::shared_ptr<PersistenceService> persistence_;
+    std::shared_ptr<TradingSystemConfig> config_;
+    std::shared_ptr<SQLiteService> persistence_;
     std::shared_ptr<RiskManager> risk_manager_;
     std::shared_ptr<TradingEngine> trading_engine_;
     std::string test_symbol_;
@@ -106,13 +98,13 @@ TEST_F(OrderLifecycleTest, SubmitMarketBuyOrder) {
     // Verify order was created
     auto order = trading_engine_->get_order(order_id);
     ASSERT_NE(order, nullptr);
-    EXPECT_EQ(order->instrument_symbol, test_symbol_);
-    EXPECT_EQ(order->side, OrderSide::BUY);
-    EXPECT_EQ(order->type, OrderType::MARKET);
-    EXPECT_EQ(order->quantity, 100.0);
+    EXPECT_EQ(order->get_instrument_symbol(), test_symbol_);
+    EXPECT_EQ(order->get_side(), OrderSide::BUY);
+    EXPECT_EQ(order->get_type(), OrderType::MARKET);
+    EXPECT_EQ(order->get_quantity(), 100.0);
 
     // In simulation mode, market orders should execute immediately
-    EXPECT_TRUE(order->status == OrderStatus::FILLED || order->status == OrderStatus::PARTIALLY_FILLED);
+    EXPECT_TRUE(order->get_status() == OrderStatus::FILLED || order->get_status() == OrderStatus::PARTIALLY_FILLED);
 
     // Verify execution reports were generated
     EXPECT_FALSE(execution_reports.empty());
@@ -122,10 +114,10 @@ TEST_F(OrderLifecycleTest, SubmitMarketBuyOrder) {
 
     if (!trades.empty()) {
         const auto& trade = trades[0];
-        EXPECT_EQ(trade.instrument_symbol, test_symbol_);
-        EXPECT_EQ(trade.side, OrderSide::BUY);
-        EXPECT_GT(trade.quantity, 0.0);
-        EXPECT_GT(trade.price, 0.0);
+        EXPECT_EQ(trade.get_instrument_symbol(), test_symbol_);
+        EXPECT_EQ(trade.get_side(), OrderSide::BUY);
+        EXPECT_GT(trade.get_quantity(), 0.0);
+        EXPECT_GT(trade.get_price(), 0.0);
     }
 }
 
@@ -165,14 +157,14 @@ TEST_F(OrderLifecycleTest, SubmitLimitSellOrder) {
     // Verify order was created
     auto order = trading_engine_->get_order(sell_order_id);
     ASSERT_NE(order, nullptr);
-    EXPECT_EQ(order->instrument_symbol, test_symbol_);
-    EXPECT_EQ(order->side, OrderSide::SELL);
-    EXPECT_EQ(order->type, OrderType::LIMIT);
-    EXPECT_EQ(order->quantity, 100.0);
-    EXPECT_EQ(order->price, 155.00);
+    EXPECT_EQ(order->get_instrument_symbol(), test_symbol_);
+    EXPECT_EQ(order->get_side(), OrderSide::SELL);
+    EXPECT_EQ(order->get_type(), OrderType::LIMIT);
+    EXPECT_EQ(order->get_quantity(), 100.0);
+    EXPECT_EQ(order->get_price(), 155.00);
 
     // Limit order above market should remain working
-    EXPECT_TRUE(order->status == OrderStatus::ACCEPTED || order->status == OrderStatus::NEW);
+    EXPECT_TRUE(order->get_status() == OrderStatus::ACCEPTED || order->get_status() == OrderStatus::NEW);
 }
 
 TEST_F(OrderLifecycleTest, CancelWorkingOrder) {
@@ -208,7 +200,7 @@ TEST_F(OrderLifecycleTest, CancelWorkingOrder) {
     // Verify order was canceled
     order = trading_engine_->get_order(order_id);
     ASSERT_NE(order, nullptr);
-    EXPECT_EQ(order->status, OrderStatus::CANCELED);
+    EXPECT_EQ(order->get_status(), OrderStatus::CANCELED);
 }
 
 TEST_F(OrderLifecycleTest, RiskRejectionScenario) {
@@ -241,8 +233,8 @@ TEST_F(OrderLifecycleTest, RiskRejectionScenario) {
 
         auto order = trading_engine_->get_order(order_id);
         ASSERT_NE(order, nullptr);
-        EXPECT_EQ(order->status, OrderStatus::REJECTED);
-        EXPECT_FALSE(order->rejection_reason.empty());
+        EXPECT_EQ(order->get_status(), OrderStatus::REJECTED);
+        EXPECT_FALSE(order->get_rejection_reason().empty());
     }
 }
 
@@ -256,9 +248,11 @@ TEST_F(OrderLifecycleTest, PositionUpdatesFromTrades) {
     request.timestamp = std::chrono::system_clock::now();
 
     // Track position updates
-    std::vector<Position> position_updates;
+    std::vector<std::shared_ptr<Position>> position_updates;
     trading_engine_->set_position_update_callback([&position_updates](const Position& position) {
-        position_updates.push_back(position);
+        // Store a copy of the position (if Position supports copying) or adjust as needed
+        // For now, we'll just track that a position update occurred
+        position_updates.push_back(std::make_shared<Position>(position.get_instrument_symbol()));
     });
 
     // Act
@@ -272,9 +266,9 @@ TEST_F(OrderLifecycleTest, PositionUpdatesFromTrades) {
     // Verify position was created/updated
     auto position = trading_engine_->get_position(test_symbol_);
     ASSERT_NE(position, nullptr);
-    EXPECT_EQ(position->instrument_symbol, test_symbol_);
-    EXPECT_GT(position->quantity, 0.0); // Should have long position
-    EXPECT_GT(position->average_price, 0.0);
+    EXPECT_EQ(position->get_instrument_symbol(), test_symbol_);
+    EXPECT_GT(position->get_quantity(), 0.0); // Should have long position
+    EXPECT_GT(position->get_average_price(), 0.0);
 
     // Verify position updates were triggered
     EXPECT_FALSE(position_updates.empty());
@@ -311,5 +305,3 @@ TEST_F(OrderLifecycleTest, DataPersistence) {
     // Verify persistence service has the data
     EXPECT_TRUE(persistence_->is_available());
 }
-
-} // Anonymous namespace for tests

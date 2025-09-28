@@ -17,10 +17,9 @@ class MarketDataFlowTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Initialize test configuration
-        config_ = std::make_shared<Config>();
-        config_->set("market_data.simulation_mode", true);
-        config_->set("market_data.update_interval_ms", 50); // Fast updates for testing
-        config_->set("market_data.symbols", "AAPL,GOOGL,MSFT");
+        config_.mode = MarketDataProvider::ProviderMode::SIMULATION;
+        config_.update_interval_ms = 50; // Fast updates for testing
+        config_.default_symbols = {"AAPL", "GOOGL", "MSFT"};
 
         // Initialize message queue for market data
         market_data_queue_ = std::make_shared<MessageQueue<MarketTick>>(1000);
@@ -50,7 +49,7 @@ protected:
         }
     }
 
-    std::shared_ptr<Config> config_;
+    MarketDataProvider::ProviderConfig config_;
     std::shared_ptr<MessageQueue<MarketTick>> market_data_queue_;
     std::shared_ptr<MarketDataProvider> market_data_provider_;
     std::vector<MarketTick> received_ticks_;
@@ -252,7 +251,7 @@ TEST_F(MarketDataFlowTest, RecentTicksHistory) {
 TEST_F(MarketDataFlowTest, HighFrequencyUpdates) {
     // Arrange
     std::string test_symbol = "AAPL";
-    config_->set("market_data.update_interval_ms", 10); // Very fast updates
+    config_.update_interval_ms = 10; // Very fast updates
 
     // Connect and subscribe
     ASSERT_TRUE(market_data_provider_->connect());
@@ -324,6 +323,7 @@ TEST_F(MarketDataFlowTest, ErrorHandling) {
 
     // In simulation mode, subscription might succeed but no data should come
     bool subscribe_result = market_data_provider_->subscribe(invalid_symbol);
+    (void)subscribe_result; // Suppress unused variable warning
 
     // Wait and verify no ticks for invalid symbol
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -342,4 +342,3 @@ TEST_F(MarketDataFlowTest, ErrorHandling) {
     EXPECT_FALSE(found_invalid_tick) << "Received tick for invalid symbol";
 }
 
-} // Anonymous namespace for tests

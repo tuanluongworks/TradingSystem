@@ -2,6 +2,9 @@
 #include <gmock/gmock.h>
 #include "infrastructure/persistence/sqlite_service.hpp"
 #include "contracts/trading_engine_api.hpp"
+#include "core/models/trade.hpp"
+#include "core/models/order.hpp"
+#include "core/models/position.hpp"
 
 using namespace trading;
 using ::testing::_;
@@ -31,9 +34,9 @@ protected:
 };
 
 TEST_F(PersistenceServiceInterfaceTest, SaveMethodsExist) {
-    Trade test_trade;
-    Order test_order;
-    Position test_position;
+    Trade test_trade("T001", "O001", "AAPL", OrderSide::BUY, 100.0, 150.0);
+    Order test_order("O001", "AAPL", OrderSide::BUY, OrderType::LIMIT, 100.0, 150.0);
+    Position test_position("AAPL");
 
     EXPECT_CALL(*service, save_trade(_))
         .WillOnce(Return(true));
