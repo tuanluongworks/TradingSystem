@@ -29,8 +29,9 @@ using namespace trading;
 class TradingApplication {
 private:
     // Core components
-    std::shared_ptr<Config> config_;
-    std::shared_ptr<PersistenceService> persistence_;
+    std::shared_ptr<ConfigurationManager> config_manager_;
+    TradingSystemConfig config_;
+    std::shared_ptr<SQLiteService> persistence_;
     std::shared_ptr<RiskManager> risk_manager_;
     std::shared_ptr<MarketDataProvider> market_data_provider_;
     std::shared_ptr<TradingEngine> trading_engine_;
@@ -55,7 +56,8 @@ public:
             LOG_INFO("Initializing Trading System...");
 
             // Load configuration
-            config_ = std::make_shared<Config>();
+            config_manager_ = std::make_shared<ConfigurationManager>();
+            config_ = config_manager_->get_configuration();
             if (!load_configuration()) {
                 LOG_ERROR("Failed to load configuration");
                 return false;
@@ -98,7 +100,7 @@ public:
             return true;
 
         } catch (const std::exception& e) {
-            LOG_ERROR("Exception during initialization: {}", e.what());
+            TRADING_LOG_ERROR("Exception during initialization: {}", e.what());
             return false;
         }
     }
@@ -114,14 +116,14 @@ public:
         try {
             // Connect to market data
             if (!market_data_provider_->connect()) {
-                LOG_WARNING("Failed to connect to market data provider");
+                TRADING_LOG_WARN("Failed to connect to market data provider");
             }
 
             // Subscribe to default symbols
-            auto default_symbols = config_->get_string_list("market_data.symbols", {"AAPL", "GOOGL", "MSFT"});
+            auto default_symbols = config_.market_data.symbols;
             for (const auto& symbol : default_symbols) {
                 market_data_provider_->subscribe(symbol);
-                LOG_INFO("Subscribed to {}", symbol);
+                TRADING_LOG_INFO("Subscribed to {}", symbol);
             }
 
             // Start UI main loop
@@ -129,7 +131,7 @@ public:
             ui_manager_->run(); // This blocks until UI is closed
 
         } catch (const std::exception& e) {
-            LOG_ERROR("Exception during execution: {}", e.what());
+            TRADING_LOG_ERROR("Exception during execution: {}", e.what());
         }
 
         LOG_INFO("Trading System shutting down...");
@@ -154,14 +156,14 @@ public:
             }
 
             if (persistence_) {
-                persistence_->shutdown();
+                persistence_->close();
             }
 
             running_ = false;
             LOG_INFO("Trading System shutdown complete");
 
         } catch (const std::exception& e) {
-            LOG_ERROR("Exception during shutdown: {}", e.what());
+            TRADING_LOG_ERROR("Exception during shutdown: {}", e.what());
         }
     }
 
@@ -171,80 +173,68 @@ private:
             // Load from default config file or create default configuration
             const std::string config_file = "config/trading_system.json";
 
-            if (!config_->load_from_file(config_file)) {
-                LOG_WARNING("Could not load config file, using defaults");
+            if (!config_manager_->load_configuration()) {
+                TRADING_LOG_WARN("Could not load config file, using defaults");
                 create_default_configuration();
             }
+            config_ = config_manager_->get_configuration();
 
             return true;
         } catch (const std::exception& e) {
-            LOG_ERROR("Error loading configuration: {}", e.what());
+            TRADING_LOG_ERROR("Error loading configuration: {}", e.what());
             return false;
         }
     }
 
     void create_default_configuration() {
-        // Market data configuration
-        config_->set("market_data.simulation_mode", true);
-        config_->set("market_data.websocket_url", "wss://api.example.com/v1/market_data");
-        config_->set("market_data.symbols", std::vector<std::string>{"AAPL", "GOOGL", "MSFT", "TSLA", "AMZN"});
-        config_->set("market_data.update_interval_ms", 100);
-
-        // Risk management configuration
-        config_->set("risk.max_position_size", 10000.0);
-        config_->set("risk.max_order_size", 1000.0);
-        config_->set("risk.max_daily_loss", 50000.0);
-        config_->set("risk.enable_pre_trade_checks", true);
-
-        // UI configuration
-        config_->set("ui.theme", "dark");
-        config_->set("ui.auto_sort", true);
-        config_->set("ui.precision", 2);
-        config_->set("ui.refresh_rate_ms", 100);
-
-        // Persistence configuration
-        config_->set("database.path", "./data/trading.db");
-        config_->set("database.backup_path", "./data/backups/");
-        config_->set("database.auto_backup", true);
-
-        LOG_INFO("Created default configuration");
+        // Use default TradingSystemConfig which already has sensible defaults
+        // The configuration manager will save these defaults
+        config_manager_->save_configuration();
+        config_ = config_manager_->get_configuration();
+        TRADING_LOG_INFO("Created default configuration");
     }
 
     void initialize_logging() {
-        auto log_level = config_->get_string("logging.level", "info");
-        auto log_file = config_->get_string("logging.file", "logs/trading_system.log");
+        auto log_config = config_.logging;
 
-        Logger::initialize(log_level, log_file);
-        LOG_INFO("Logging initialized: level={}, file={}", log_level, log_file);
+        Logger::initialize(log_config.log_file_path);
+        TRADING_LOG_INFO("Logging initialized: level={}, file={}",
+                        log_config.log_level, log_config.log_file_path);
     }
 
     bool initialize_persistence() {
-        persistence_ = std::make_shared<PersistenceService>(config_);
+        persistence_ = std::make_shared<SQLiteService>(config_.persistence.database_path);
         if (!persistence_->initialize()) {
             return false;
         }
 
         if (!persistence_->is_available()) {
-            LOG_ERROR("Persistence service not available");
+            TRADING_LOG_ERROR("Persistence service not available");
             return false;
         }
 
-        LOG_INFO("Persistence service initialized: {}", persistence_->get_status());
+        TRADING_LOG_INFO("Persistence service initialized: {}", persistence_->get_status());
         return true;
     }
 
     bool initialize_risk_management() {
-        risk_manager_ = std::make_shared<RiskManager>(config_);
-        if (!risk_manager_->initialize()) {
-            return false;
-        }
+        risk_manager_ = std::make_shared<RiskManager>(config_.risk_management);
 
-        LOG_INFO("Risk manager initialized");
+        TRADING_LOG_INFO("Risk manager initialized");
         return true;
     }
 
     bool initialize_market_data() {
-        market_data_provider_ = std::make_shared<MarketDataProvider>(config_);
+        // Convert MarketDataConfig to ProviderConfig
+        MarketDataProvider::ProviderConfig provider_config;
+        provider_config.mode = config_.market_data.simulation_mode ?
+                              MarketDataProvider::ProviderMode::SIMULATION :
+                              MarketDataProvider::ProviderMode::WEBSOCKET;
+        provider_config.websocket_url = config_.market_data.websocket_url;
+        provider_config.update_interval_ms = config_.market_data.update_interval_ms;
+        provider_config.default_symbols = config_.market_data.symbols;
+
+        market_data_provider_ = std::make_shared<MarketDataProvider>(provider_config);
 
         // Set up market data callbacks
         market_data_provider_->set_tick_callback([this](const MarketTick& tick) {
@@ -271,25 +261,25 @@ private:
         });
 
         market_data_provider_->set_connection_callback([this](bool connected) {
-            LOG_INFO("Market data connection status: {}", connected ? "Connected" : "Disconnected");
+            TRADING_LOG_INFO("Market data connection status: {}", connected ? "Connected" : "Disconnected");
             if (status_panel_) {
                 status_panel_->set_market_data_connected(connected);
             }
         });
 
-        LOG_INFO("Market data provider initialized");
+        TRADING_LOG_INFO("Market data provider initialized");
         return true;
     }
 
     bool initialize_trading_engine() {
-        trading_engine_ = std::make_shared<TradingEngine>(config_, persistence_, risk_manager_);
+        trading_engine_ = std::make_shared<TradingEngine>(risk_manager_, persistence_);
         if (!trading_engine_->initialize()) {
             return false;
         }
 
         // Set up trading engine callbacks
         trading_engine_->set_order_update_callback([this](const ExecutionReport& report) {
-            LOG_INFO("Order update: {} - {} -> {}", report.order_id,
+            TRADING_LOG_INFO("Order update: {} - {} -> {}", report.order_id,
                     order_status_to_string(report.old_status),
                     order_status_to_string(report.new_status));
 
@@ -298,17 +288,17 @@ private:
         });
 
         trading_engine_->set_trade_callback([this](const Trade& trade) {
-            LOG_INFO("Trade executed: {} {} {} @ {}", trade.trade_id,
-                    trade.side == OrderSide::BUY ? "BUY" : "SELL",
-                    trade.quantity, trade.price);
+            TRADING_LOG_INFO("Trade executed: {} {} {} @ {}", trade.get_trade_id(),
+                    trade.get_side() == OrderSide::BUY ? "BUY" : "SELL",
+                    trade.get_quantity(), trade.get_price());
 
             // Update UI panels
             update_trade_displays();
         });
 
         trading_engine_->set_position_update_callback([this](const Position& position) {
-            LOG_INFO("Position updated: {} - {} @ {}", position.instrument_symbol,
-                    position.quantity, position.average_price);
+            TRADING_LOG_INFO("Position updated: {} - {} @ {}", position.get_instrument_symbol(),
+                    position.get_quantity(), position.get_average_price());
 
             // Update UI panels
             update_position_displays();
@@ -341,7 +331,7 @@ private:
             return true;
 
         } catch (const std::exception& e) {
-            LOG_ERROR("UI initialization failed: {}", e.what());
+            TRADING_LOG_ERROR("UI initialization failed: {}", e.what());
             return false;
         }
     }
@@ -360,34 +350,34 @@ private:
 
                 std::string order_id = trading_engine_->submit_order(request);
                 if (!order_id.empty()) {
-                    LOG_INFO("Order submitted: {}", order_id);
+                    TRADING_LOG_INFO("Order submitted: {}", order_id);
                     order_entry_panel_->reset_form();
                 } else {
                     LOG_ERROR("Failed to submit order");
                 }
             } catch (const std::exception& e) {
-                LOG_ERROR("Error submitting order: {}", e.what());
+                TRADING_LOG_ERROR("Error submitting order: {}", e.what());
             }
         });
 
         // Market data panel callbacks
         market_data_panel_->set_symbol_click_callback([this](const std::string& symbol) {
             order_entry_panel_->set_instrument(symbol);
-            LOG_INFO("Selected symbol: {}", symbol);
+            TRADING_LOG_INFO("Selected symbol: {}", symbol);
         });
 
         market_data_panel_->set_subscribe_callback([this](const std::string& symbol) {
             if (market_data_provider_->subscribe(symbol)) {
-                LOG_INFO("Subscribed to {}", symbol);
+                TRADING_LOG_INFO("Subscribed to {}", symbol);
             } else {
-                LOG_ERROR("Failed to subscribe to {}", symbol);
+                TRADING_LOG_ERROR("Failed to subscribe to {}", symbol);
             }
         });
 
         // Position panel callbacks
         positions_panel_->set_position_click_callback([this](const std::string& symbol) {
             order_entry_panel_->set_instrument(symbol);
-            LOG_INFO("Selected position: {}", symbol);
+            TRADING_LOG_INFO("Selected position: {}", symbol);
         });
     }
 
@@ -400,17 +390,17 @@ private:
 
             for (const auto& order : working_orders) {
                 ui::OrderRow row;
-                row.order_id = order->order_id;
-                row.symbol = order->instrument_symbol;
-                row.side = (order->side == OrderSide::BUY) ? "BUY" : "SELL";
-                row.type = (order->type == OrderType::MARKET) ? "MARKET" : "LIMIT";
-                row.status = order_status_to_string(order->status);
-                row.quantity = order->quantity;
-                row.price = order->price;
-                row.filled_quantity = order->filled_quantity;
-                row.remaining_quantity = order->remaining_quantity;
-                row.created_time = order->created_time;
-                row.last_modified = order->last_modified;
+                row.order_id = order->get_order_id();
+                row.symbol = order->get_instrument_symbol();
+                row.side = (order->get_side() == OrderSide::BUY) ? "BUY" : "SELL";
+                row.type = (order->get_type() == OrderType::MARKET) ? "MARKET" : "LIMIT";
+                row.status = order_status_to_string(order->get_status());
+                row.quantity = order->get_quantity();
+                row.price = order->get_price();
+                row.filled_quantity = order->get_filled_quantity();
+                row.remaining_quantity = order->get_remaining_quantity();
+                row.created_time = order->get_created_time();
+                row.last_modified = order->get_last_modified();
                 order_rows.push_back(row);
             }
 
@@ -418,7 +408,7 @@ private:
             // ui_manager_->update_orders(order_rows);
 
         } catch (const std::exception& e) {
-            LOG_ERROR("Error updating order displays: {}", e.what());
+            TRADING_LOG_ERROR("Error updating order displays: {}", e.what());
         }
     }
 
@@ -431,21 +421,21 @@ private:
 
             for (const auto& trade : daily_trades) {
                 ui::TradeRow row;
-                row.trade_id = trade->trade_id;
-                row.order_id = trade->order_id;
-                row.symbol = trade->instrument_symbol;
-                row.side = (trade->side == OrderSide::BUY) ? "BUY" : "SELL";
-                row.quantity = trade->quantity;
-                row.price = trade->price;
+                row.trade_id = trade->get_trade_id();
+                row.order_id = trade->get_order_id();
+                row.symbol = trade->get_instrument_symbol();
+                row.side = (trade->get_side() == OrderSide::BUY) ? "BUY" : "SELL";
+                row.quantity = trade->get_quantity();
+                row.price = trade->get_price();
                 row.notional_value = trade->get_notional_value();
-                row.execution_time = trade->execution_time;
+                row.execution_time = trade->get_execution_time();
                 trade_rows.push_back(row);
             }
 
             trades_panel_->update_data(trade_rows);
 
         } catch (const std::exception& e) {
-            LOG_ERROR("Error updating trade displays: {}", e.what());
+            TRADING_LOG_ERROR("Error updating trade displays: {}", e.what());
         }
     }
 
@@ -458,13 +448,13 @@ private:
 
             for (const auto& position : positions) {
                 ui::PositionRow row;
-                row.symbol = position->instrument_symbol;
-                row.quantity = position->quantity;
-                row.average_price = position->average_price;
+                row.symbol = position->get_instrument_symbol();
+                row.quantity = position->get_quantity();
+                row.average_price = position->get_average_price();
                 row.current_price = 0.0; // Would get from market data
                 row.market_value = position->get_market_value(row.current_price);
-                row.unrealized_pnl = position->unrealized_pnl;
-                row.realized_pnl = position->realized_pnl;
+                row.unrealized_pnl = position->get_unrealized_pnl();
+                row.realized_pnl = position->get_realized_pnl();
                 row.total_pnl = position->get_total_pnl(row.current_price);
                 row.change_percent = 0.0; // Would calculate from current vs average price
                 position_rows.push_back(row);
@@ -473,7 +463,7 @@ private:
             positions_panel_->update_data(position_rows);
 
         } catch (const std::exception& e) {
-            LOG_ERROR("Error updating position displays: {}", e.what());
+            TRADING_LOG_ERROR("Error updating position displays: {}", e.what());
         }
     }
 
@@ -516,7 +506,7 @@ void signal_handler(int signal) {
     exit(0);
 }
 
-int main(int argc, char* argv[]) {
+int main(int /*argc*/, char* /*argv*/[]) {
     std::cout << "=== C++ Trading System ===" << std::endl;
     std::cout << "Version: 1.0.0" << std::endl;
     std::cout << "Built: " << __DATE__ << " " << __TIME__ << std::endl;

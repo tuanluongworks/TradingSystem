@@ -2,6 +2,9 @@
 
 # Core library (shared between main app and tests)
 add_library(trading_core
+    # Contracts
+    contracts/trading_engine_api.cpp
+
     # Core models
     core/models/instrument.cpp
     core/models/order.cpp
