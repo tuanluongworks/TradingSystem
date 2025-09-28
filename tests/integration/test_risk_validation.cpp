@@ -17,23 +17,22 @@ class RiskValidationTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Initialize test configuration with strict risk limits
-        config_ = std::make_shared<Config>();
-        config_->set("database.path", ":memory:");
-        config_->set("risk.max_position_size", 1000.0);
-        config_->set("risk.max_order_size", 500.0);
-        config_->set("risk.max_daily_loss", 5000.0);
-        config_->set("risk.enable_pre_trade_checks", true);
+        config_ = std::make_shared<TradingSystemConfig>();
+        config_->persistence.database_path = ":memory:";
+        config_->risk_management.max_position_size = 1000.0;
+        config_->risk_management.max_order_size = 500.0;
+        config_->risk_management.max_daily_loss = 5000.0;
+        config_->risk_management.enable_risk_checks = true;
 
         // Initialize persistence service
-        persistence_ = std::make_shared<PersistenceService>(config_);
+        persistence_ = std::make_shared<SQLiteService>(config_->persistence.database_path);
         ASSERT_TRUE(persistence_->initialize());
 
         // Initialize risk manager
-        risk_manager_ = std::make_shared<RiskManager>(config_);
-        ASSERT_TRUE(risk_manager_->initialize());
+        risk_manager_ = std::make_shared<RiskManager>(config_->risk_management);
 
         // Initialize trading engine with risk manager
-        trading_engine_ = std::make_shared<TradingEngine>(config_, persistence_, risk_manager_);
+        trading_engine_ = std::make_shared<TradingEngine>(risk_manager_, persistence_);
         ASSERT_TRUE(trading_engine_->initialize());
 
         // Set up test symbols
@@ -54,7 +53,7 @@ protected:
             trading_engine_->shutdown();
         }
         if (persistence_) {
-            persistence_->shutdown();
+            persistence_->close();
         }
     }
 
@@ -83,8 +82,8 @@ protected:
         std::this_thread::sleep_for(std::chrono::milliseconds(200));
     }
 
-    std::shared_ptr<Config> config_;
-    std::shared_ptr<PersistenceService> persistence_;
+    std::shared_ptr<TradingSystemConfig> config_;
+    std::shared_ptr<SQLiteService> persistence_;
     std::shared_ptr<RiskManager> risk_manager_;
     std::shared_ptr<TradingEngine> trading_engine_;
     std::string test_symbol_;
@@ -117,7 +116,7 @@ TEST_F(RiskValidationTest, PositionLimitValidation) {
 
     auto existing_position = trading_engine_->get_position(test_symbol_);
     ASSERT_NE(existing_position, nullptr);
-    EXPECT_EQ(existing_position->quantity, 600.0);
+    EXPECT_EQ(existing_position->get_quantity(), 600.0);
 
     double position_limit = risk_manager_->get_position_limit(test_symbol_);
     EXPECT_EQ(position_limit, 800.0);
@@ -140,6 +139,7 @@ TEST_F(RiskValidationTest, PositionLimitValidation) {
 TEST_F(RiskValidationTest, PositionLimitWithShortSelling) {
     // Test short position limit (if supported)
     double position_limit = risk_manager_->get_position_limit(test_symbol_);
+    (void)position_limit; // Suppress unused variable warning
 
     // Try to create short position within limit
     auto short_request = create_order_request(test_symbol_, OrderSide::SELL,
@@ -153,7 +153,7 @@ TEST_F(RiskValidationTest, PositionLimitWithShortSelling) {
 
             auto position = trading_engine_->get_position(test_symbol_);
             if (position != nullptr) {
-                EXPECT_EQ(position->quantity, -500.0);
+                EXPECT_EQ(position->get_quantity(), -500.0);
 
                 // Now test limit on further short selling
                 auto excessive_short = create_order_request(test_symbol_, OrderSide::SELL,
@@ -201,8 +201,8 @@ TEST_F(RiskValidationTest, PreTradeRiskCheckIntegration) {
         // Order was created but should be rejected
         auto order = trading_engine_->get_order(order_id);
         ASSERT_NE(order, nullptr);
-        EXPECT_EQ(order->status, OrderStatus::REJECTED);
-        EXPECT_FALSE(order->rejection_reason.empty());
+        EXPECT_EQ(order->get_status(), OrderStatus::REJECTED);
+        EXPECT_FALSE(order->get_rejection_reason().empty());
 
         // Should appear in rejected orders list
         EXPECT_TRUE(std::find(rejected_orders_.begin(), rejected_orders_.end(), order_id)
@@ -249,8 +249,7 @@ TEST_F(RiskValidationTest, RiskLimitPersistence) {
     EXPECT_EQ(risk_manager_->get_order_size_limit("GOOGL"), 750.0);
 
     // Act - Simulate system restart
-    risk_manager_ = std::make_shared<RiskManager>(config_);
-    ASSERT_TRUE(risk_manager_->initialize());
+    risk_manager_ = std::make_shared<RiskManager>(config_->risk_management);
 
     // Assert - Verify limits were restored (if persistence is implemented)
     // Note: This test may fail if risk limits are not persisted
@@ -337,4 +336,3 @@ TEST_F(RiskValidationTest, RiskValidationPerformance) {
         << "Risk validation too slow: " << avg_time_per_validation << " μs per validation";
 }
 
-} // Anonymous namespace for tests

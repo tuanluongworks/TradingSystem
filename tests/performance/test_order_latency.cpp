@@ -21,24 +21,28 @@ class OrderLatencyTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Initialize test configuration optimized for performance
-        config_ = std::make_shared<Config>();
-        config_->set("database.path", ":memory:"); // In-memory for speed
-        config_->set("market_data.simulation_mode", true);
-        config_->set("market_data.update_interval_ms", 1); // High frequency
-        config_->set("risk.max_position_size", 100000.0); // High limits for testing
-        config_->set("risk.max_order_size", 10000.0);
+        config_ = std::make_shared<TradingSystemConfig>();
+        config_->persistence.database_path = ":memory:"; // In-memory for speed
+        config_->market_data.simulation_mode = true;
+        config_->market_data.update_interval_ms = 1; // High frequency
+        config_->risk_management.max_position_size = 100000.0; // High limits for testing
+        config_->risk_management.max_order_size = 10000.0;
 
         // Initialize components
-        persistence_ = std::make_shared<PersistenceService>(config_);
+        persistence_ = std::make_shared<SQLiteService>(config_->persistence.database_path);
         ASSERT_TRUE(persistence_->initialize());
 
-        risk_manager_ = std::make_shared<RiskManager>(config_);
-        ASSERT_TRUE(risk_manager_->initialize());
+        risk_manager_ = std::make_shared<RiskManager>(config_->risk_management);
 
-        market_data_provider_ = std::make_shared<MarketDataProvider>(config_);
+        // Create market data provider config
+        MarketDataProvider::ProviderConfig md_config;
+        md_config.mode = MarketDataProvider::ProviderMode::SIMULATION;
+        md_config.update_interval_ms = config_->market_data.update_interval_ms;
+        md_config.default_symbols = config_->market_data.symbols;
+        market_data_provider_ = std::make_shared<MarketDataProvider>(md_config);
         ASSERT_TRUE(market_data_provider_->connect());
 
-        trading_engine_ = std::make_shared<TradingEngine>(config_, persistence_, risk_manager_);
+        trading_engine_ = std::make_shared<TradingEngine>(risk_manager_, persistence_);
         ASSERT_TRUE(trading_engine_->initialize());
 
         // Set up test symbols
@@ -51,7 +55,7 @@ protected:
         std::this_thread::sleep_for(std::chrono::milliseconds(100));
 
         // Initialize random number generator
-        random_engine_.seed(std::chrono::system_clock::now().time_since_epoch().count());
+        random_engine_.seed(static_cast<unsigned int>(std::chrono::system_clock::now().time_since_epoch().count()));
     }
 
     void TearDown() override {
@@ -62,7 +66,7 @@ protected:
             market_data_provider_->disconnect();
         }
         if (persistence_) {
-            persistence_->shutdown();
+            // SQLiteService doesn't have shutdown method
         }
     }
 
@@ -91,8 +95,8 @@ protected:
         microseconds end_to_end_latency;
     };
 
-    std::shared_ptr<Config> config_;
-    std::shared_ptr<PersistenceService> persistence_;
+    std::shared_ptr<TradingSystemConfig> config_;
+    std::shared_ptr<SQLiteService> persistence_;
     std::shared_ptr<RiskManager> risk_manager_;
     std::shared_ptr<MarketDataProvider> market_data_provider_;
     std::shared_ptr<TradingEngine> trading_engine_;
@@ -366,7 +370,8 @@ TEST_F(OrderLatencyTest, MarketDataProcessingLatency) {
         auto position = trading_engine_->get_position(tick.instrument_symbol);
         if (position != nullptr) {
             // Calculate unrealized P&L (simulated)
-            double unrealized_pnl = (tick.last_price - position->average_price) * position->quantity;
+            double unrealized_pnl = (tick.last_price - position->get_average_price()) * position->get_quantity();
+            (void)unrealized_pnl; // Suppress unused variable warning
         }
 
         auto processing_end = high_resolution_clock::now();
@@ -478,4 +483,4 @@ TEST_F(OrderLatencyTest, MemoryUsageStability) {
     EXPECT_GT(all_positions.size(), 0) << "No positions created";
 }
 
-} // Anonymous namespace for tests
+// End of test file

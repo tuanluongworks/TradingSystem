@@ -4,6 +4,7 @@
 #include <chrono>
 
 #include "core/engine/trading_engine.hpp"
+#include "core/risk/risk_manager.hpp"
 #include "core/models/position.hpp"
 #include "core/models/order.hpp"
 #include "core/models/trade.hpp"
@@ -17,20 +18,23 @@ class PositionTrackingTest : public ::testing::Test {
 protected:
     void SetUp() override {
         // Initialize test configuration
-        config_ = std::make_shared<Config>();
-        config_->set("database.path", ":memory:"); // In-memory database for testing
-        config_->set("market_data.simulation_mode", true);
+        config_ = std::make_shared<TradingSystemConfig>();
+        config_->persistence.database_path = ":memory:"; // In-memory database for testing
+        config_->market_data.simulation_mode = true;
 
         // Initialize persistence service
-        persistence_ = std::make_shared<PersistenceService>(config_);
+        persistence_ = std::make_shared<SQLiteService>(config_->persistence.database_path);
         ASSERT_TRUE(persistence_->initialize());
 
         // Initialize market data provider
-        market_data_provider_ = std::make_shared<MarketDataProvider>(config_);
+        MarketDataProvider::ProviderConfig md_config;
+        md_config.mode = MarketDataProvider::ProviderMode::SIMULATION;
+        market_data_provider_ = std::make_shared<MarketDataProvider>(md_config);
         ASSERT_TRUE(market_data_provider_->connect());
 
         // Initialize trading engine
-        trading_engine_ = std::make_shared<TradingEngine>(config_, persistence_, nullptr);
+        auto risk_manager = std::make_shared<RiskManager>(config_->risk_management);
+        trading_engine_ = std::make_shared<TradingEngine>(risk_manager, persistence_);
         ASSERT_TRUE(trading_engine_->initialize());
 
         // Set up test symbols
@@ -40,7 +44,7 @@ protected:
         // Track position updates
         position_updates_.clear();
         trading_engine_->set_position_update_callback([this](const Position& position) {
-            position_updates_.push_back(position);
+            position_updates_.push_back(std::make_shared<Position>(position.get_instrument_symbol()));
         });
     }
 
@@ -52,7 +56,7 @@ protected:
             market_data_provider_->disconnect();
         }
         if (persistence_) {
-            persistence_->shutdown();
+            persistence_->close();
         }
     }
 
@@ -78,12 +82,12 @@ protected:
         return request;
     }
 
-    std::shared_ptr<Config> config_;
-    std::shared_ptr<PersistenceService> persistence_;
+    std::shared_ptr<TradingSystemConfig> config_;
+    std::shared_ptr<SQLiteService> persistence_;
     std::shared_ptr<MarketDataProvider> market_data_provider_;
     std::shared_ptr<TradingEngine> trading_engine_;
     std::vector<std::string> test_symbols_;
-    std::vector<Position> position_updates_;
+    std::vector<std::shared_ptr<Position>> position_updates_;
 };
 
 TEST_F(PositionTrackingTest, InitialPositionCreation) {
@@ -106,16 +110,16 @@ TEST_F(PositionTrackingTest, InitialPositionCreation) {
     // Assert - Verify position was created
     auto position = trading_engine_->get_position(symbol);
     ASSERT_NE(position, nullptr);
-    EXPECT_EQ(position->instrument_symbol, symbol);
-    EXPECT_EQ(position->quantity, quantity);
-    EXPECT_GT(position->average_price, 0.0);
-    EXPECT_EQ(position->realized_pnl, 0.0); // No realized P&L yet
+    EXPECT_EQ(position->get_instrument_symbol(), symbol);
+    EXPECT_EQ(position->get_quantity(), quantity);
+    EXPECT_GT(position->get_average_price(), 0.0);
+    EXPECT_EQ(position->get_realized_pnl(), 0.0); // No realized P&L yet
 
     // Verify position update callback was triggered
     EXPECT_FALSE(position_updates_.empty());
     bool found_position_update = false;
     for (const auto& update : position_updates_) {
-        if (update.instrument_symbol == symbol && update.quantity == quantity) {
+        if (update->get_instrument_symbol() == symbol && update->get_quantity() == quantity) {
             found_position_update = true;
             break;
         }
@@ -132,8 +136,9 @@ TEST_F(PositionTrackingTest, LongPositionIncrease) {
 
     auto initial_position = trading_engine_->get_position(symbol);
     ASSERT_NE(initial_position, nullptr);
-    double initial_quantity = initial_position->quantity;
-    double initial_avg_price = initial_position->average_price;
+    double initial_quantity = initial_position->get_quantity();
+    double initial_avg_price = initial_position->get_average_price();
+    (void)initial_avg_price; // Suppress unused variable warning
 
     // Act - Add to position
     auto buy_request2 = create_order_request(symbol, OrderSide::BUY, OrderType::MARKET, 50.0);
@@ -143,11 +148,11 @@ TEST_F(PositionTrackingTest, LongPositionIncrease) {
     // Assert - Verify position increased
     auto final_position = trading_engine_->get_position(symbol);
     ASSERT_NE(final_position, nullptr);
-    EXPECT_EQ(final_position->quantity, initial_quantity + 50.0);
+    EXPECT_EQ(final_position->get_quantity(), initial_quantity + 50.0);
 
     // Verify average price calculation
     // New average should be weighted by quantities
-    EXPECT_GT(final_position->average_price, 0.0);
+    EXPECT_GT(final_position->get_average_price(), 0.0);
     // Exact average price calculation depends on execution prices
 }
 
@@ -160,7 +165,7 @@ TEST_F(PositionTrackingTest, PartialPositionReduce) {
 
     auto initial_position = trading_engine_->get_position(symbol);
     ASSERT_NE(initial_position, nullptr);
-    EXPECT_EQ(initial_position->quantity, 200.0);
+    EXPECT_EQ(initial_position->get_quantity(), 200.0);
 
     // Act - Partially sell position
     auto sell_request = create_order_request(symbol, OrderSide::SELL, OrderType::MARKET, 75.0);
@@ -170,9 +175,9 @@ TEST_F(PositionTrackingTest, PartialPositionReduce) {
     // Assert - Verify position reduced
     auto final_position = trading_engine_->get_position(symbol);
     ASSERT_NE(final_position, nullptr);
-    EXPECT_EQ(final_position->quantity, 125.0); // 200 - 75
-    EXPECT_EQ(final_position->average_price, initial_position->average_price); // Avg price unchanged
-    EXPECT_NE(final_position->realized_pnl, 0.0); // Should have realized P&L
+    EXPECT_EQ(final_position->get_quantity(), 125.0); // 200 - 75
+    EXPECT_EQ(final_position->get_average_price(), initial_position->get_average_price()); // Avg price unchanged
+    EXPECT_NE(final_position->get_realized_pnl(), 0.0); // Should have realized P&L
 }
 
 TEST_F(PositionTrackingTest, PositionFlattening) {
@@ -184,7 +189,7 @@ TEST_F(PositionTrackingTest, PositionFlattening) {
 
     auto initial_position = trading_engine_->get_position(symbol);
     ASSERT_NE(initial_position, nullptr);
-    double initial_quantity = initial_position->quantity;
+    double initial_quantity = initial_position->get_quantity();
 
     // Act - Sell entire position
     auto sell_request = create_order_request(symbol, OrderSide::SELL, OrderType::MARKET, initial_quantity);
@@ -195,7 +200,7 @@ TEST_F(PositionTrackingTest, PositionFlattening) {
     auto final_position = trading_engine_->get_position(symbol);
     if (final_position != nullptr) {
         EXPECT_TRUE(final_position->is_flat());
-        EXPECT_EQ(final_position->quantity, 0.0);
+        EXPECT_EQ(final_position->get_quantity(), 0.0);
     }
     // Note: Some implementations might delete flat positions entirely
 }
@@ -219,8 +224,8 @@ TEST_F(PositionTrackingTest, ShortPositionCreation) {
         // Assert - Verify short position was created
         auto position = trading_engine_->get_position(symbol);
         ASSERT_NE(position, nullptr);
-        EXPECT_EQ(position->quantity, -quantity); // Negative for short
-        EXPECT_GT(position->average_price, 0.0);
+        EXPECT_EQ(position->get_quantity(), -quantity); // Negative for short
+        EXPECT_GT(position->get_average_price(), 0.0);
     } else {
         // Short selling not allowed - verify order was rejected
         EXPECT_TRUE(order_id.empty());
@@ -238,7 +243,7 @@ TEST_F(PositionTrackingTest, UnrealizedPnLCalculation) {
 
     auto position = trading_engine_->get_position(symbol);
     ASSERT_NE(position, nullptr);
-    double initial_avg_price = position->average_price;
+    double initial_avg_price = position->get_average_price();
 
     // Act - Wait for potential price changes
     std::this_thread::sleep_for(std::chrono::milliseconds(500));
@@ -253,11 +258,11 @@ TEST_F(PositionTrackingTest, UnrealizedPnLCalculation) {
     ASSERT_NE(position, nullptr);
 
     // Assert - Verify unrealized P&L calculation
-    double expected_unrealized_pnl = (current_price - initial_avg_price) * position->quantity;
-    EXPECT_DOUBLE_EQ(position->unrealized_pnl, expected_unrealized_pnl);
+    double expected_unrealized_pnl = (current_price - initial_avg_price) * position->get_quantity();
+    EXPECT_DOUBLE_EQ(position->get_unrealized_pnl(), expected_unrealized_pnl);
 
     // Verify total P&L
-    double expected_total_pnl = position->realized_pnl + position->unrealized_pnl;
+    double expected_total_pnl = position->get_realized_pnl() + position->get_unrealized_pnl();
     EXPECT_DOUBLE_EQ(position->get_total_pnl(current_price), expected_total_pnl);
 }
 
@@ -283,9 +288,9 @@ TEST_F(PositionTrackingTest, MultipleSymbolPositions) {
     for (size_t i = 0; i < test_symbols_.size(); ++i) {
         auto position = trading_engine_->get_position(test_symbols_[i]);
         ASSERT_NE(position, nullptr);
-        EXPECT_EQ(position->instrument_symbol, test_symbols_[i]);
-        EXPECT_EQ(position->quantity, quantities[i]);
-        EXPECT_GT(position->average_price, 0.0);
+        EXPECT_EQ(position->get_instrument_symbol(), test_symbols_[i]);
+        EXPECT_EQ(position->get_quantity(), quantities[i]);
+        EXPECT_GT(position->get_average_price(), 0.0);
     }
 }
 
@@ -305,7 +310,7 @@ TEST_F(PositionTrackingTest, RealizedPnLAccumulation) {
 
     auto position_after_sell1 = trading_engine_->get_position(symbol);
     ASSERT_NE(position_after_sell1, nullptr);
-    double realized_pnl_1 = position_after_sell1->realized_pnl;
+    double realized_pnl_1 = position_after_sell1->get_realized_pnl();
 
     // Another buy
     auto buy_request2 = create_order_request(symbol, OrderSide::BUY, OrderType::MARKET, 75.0);
@@ -323,11 +328,11 @@ TEST_F(PositionTrackingTest, RealizedPnLAccumulation) {
 
     // Realized P&L should have increased (or decreased based on prices)
     // The exact value depends on execution prices, but it should be different
-    EXPECT_NE(final_position->realized_pnl, realized_pnl_1);
+    EXPECT_NE(final_position->get_realized_pnl(), realized_pnl_1);
 
     // Verify position quantity is correct
     double expected_quantity = 100.0 - 50.0 + 75.0 - 25.0; // 100
-    EXPECT_EQ(final_position->quantity, expected_quantity);
+    EXPECT_EQ(final_position->get_quantity(), expected_quantity);
 }
 
 TEST_F(PositionTrackingTest, PositionPersistence) {
@@ -342,16 +347,16 @@ TEST_F(PositionTrackingTest, PositionPersistence) {
 
     // Act - Simulate system restart by creating new engine instance
     trading_engine_->shutdown();
-    trading_engine_ = std::make_shared<TradingEngine>(config_, persistence_, nullptr);
+    auto risk_manager = std::make_shared<RiskManager>(config_->risk_management);
+    trading_engine_ = std::make_shared<TradingEngine>(risk_manager, persistence_);
     ASSERT_TRUE(trading_engine_->initialize());
 
     // Assert - Verify position was restored
     auto restored_position = trading_engine_->get_position(symbol);
     ASSERT_NE(restored_position, nullptr);
-    EXPECT_EQ(restored_position->instrument_symbol, original_position->instrument_symbol);
-    EXPECT_EQ(restored_position->quantity, original_position->quantity);
-    EXPECT_EQ(restored_position->average_price, original_position->average_price);
-    EXPECT_EQ(restored_position->realized_pnl, original_position->realized_pnl);
+    EXPECT_EQ(restored_position->get_instrument_symbol(), original_position->get_instrument_symbol());
+    EXPECT_EQ(restored_position->get_quantity(), original_position->get_quantity());
+    EXPECT_EQ(restored_position->get_average_price(), original_position->get_average_price());
+    EXPECT_EQ(restored_position->get_realized_pnl(), original_position->get_realized_pnl());
 }
 
-} // Anonymous namespace for tests

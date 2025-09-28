@@ -26,13 +26,13 @@ protected:
         std::filesystem::remove(backup_path_);
 
         // Initialize test configuration
-        config_ = std::make_shared<Config>();
-        config_->set("database.path", test_db_path_.string());
-        config_->set("database.backup_enabled", true);
-        config_->set("database.backup_path", backup_path_.string());
+        config_ = std::make_shared<TradingSystemConfig>();
+        config_->persistence.database_path = test_db_path_.string();
+        config_->persistence.auto_backup = true;
+        config_->persistence.backup_path = backup_path_.string();
 
         // Initialize persistence service
-        persistence_ = std::make_shared<PersistenceService>(config_);
+        persistence_ = std::make_shared<SQLiteService>(config_->persistence.database_path);
         ASSERT_TRUE(persistence_->initialize());
         ASSERT_TRUE(persistence_->is_available());
 
@@ -42,7 +42,7 @@ protected:
 
     void TearDown() override {
         if (persistence_) {
-            persistence_->shutdown();
+            persistence_->close();
         }
 
         // Clean up test files
@@ -52,56 +52,28 @@ protected:
 
     void create_test_data() {
         // Create test instruments
-        test_instrument_ = std::make_shared<Instrument>();
-        test_instrument_->symbol = "AAPL";
-        test_instrument_->name = "Apple Inc";
-        test_instrument_->type = InstrumentType::STOCK;
-        test_instrument_->tick_size = 0.01;
-        test_instrument_->lot_size = 1;
-        test_instrument_->is_active = true;
-        test_instrument_->bid_price = 150.00;
-        test_instrument_->ask_price = 150.05;
-        test_instrument_->last_price = 150.02;
+        test_instrument_ = std::make_shared<Instrument>("AAPL", "Apple Inc", InstrumentType::STOCK, 0.01, 1);
+        test_instrument_->set_active(true);
+        test_instrument_->update_market_data(150.00, 150.05, 150.02);
 
         // Create test order
-        test_order_ = std::make_shared<Order>();
-        test_order_->order_id = "ORDER_001";
-        test_order_->instrument_symbol = "AAPL";
-        test_order_->side = OrderSide::BUY;
-        test_order_->type = OrderType::MARKET;
-        test_order_->quantity = 100.0;
-        test_order_->price = 0.0;
-        test_order_->status = OrderStatus::FILLED;
-        test_order_->filled_quantity = 100.0;
-        test_order_->remaining_quantity = 0.0;
-        test_order_->created_time = std::chrono::system_clock::now();
-        test_order_->last_modified = test_order_->created_time;
+        test_order_ = std::make_shared<Order>("ORDER_001", "AAPL", OrderSide::BUY, OrderType::MARKET, 100.0, 0.0);
+        test_order_->accept();
+        test_order_->fill(100.0, 150.02);
 
         // Create test trade
-        test_trade_ = std::make_shared<Trade>();
-        test_trade_->trade_id = "TRADE_001";
-        test_trade_->order_id = "ORDER_001";
-        test_trade_->instrument_symbol = "AAPL";
-        test_trade_->side = OrderSide::BUY;
-        test_trade_->quantity = 100.0;
-        test_trade_->price = 150.02;
-        test_trade_->execution_time = std::chrono::system_clock::now();
-        test_trade_->type = TradeType::FULL_FILL;
+        test_trade_ = std::make_shared<Trade>("TRADE_001", "ORDER_001", "AAPL", OrderSide::BUY, 100.0, 150.02, TradeType::FULL_FILL);
 
         // Create test position
-        test_position_ = std::make_shared<Position>();
-        test_position_->instrument_symbol = "AAPL";
-        test_position_->quantity = 100.0;
-        test_position_->average_price = 150.02;
-        test_position_->realized_pnl = 0.0;
-        test_position_->unrealized_pnl = 5.0; // Assuming price moved up
-        test_position_->last_updated = std::chrono::system_clock::now();
+        test_position_ = std::make_shared<Position>("AAPL");
+        test_position_->add_trade(100.0, 150.02);
+        test_position_->update_unrealized_pnl(150.07); // Assuming price moved up
     }
 
     std::filesystem::path test_db_path_;
     std::filesystem::path backup_path_;
-    std::shared_ptr<Config> config_;
-    std::shared_ptr<PersistenceService> persistence_;
+    std::shared_ptr<TradingSystemConfig> config_;
+    std::shared_ptr<SQLiteService> persistence_;
 
     std::shared_ptr<Instrument> test_instrument_;
     std::shared_ptr<Order> test_order_;
@@ -138,14 +110,14 @@ TEST_F(DataPersistenceTest, OrderPersistence) {
 
     bool found_order = false;
     for (const auto& order : loaded_orders) {
-        if (order->order_id == test_order_->order_id) {
+        if (order->get_order_id() == test_order_->get_order_id()) {
             found_order = true;
-            EXPECT_EQ(order->instrument_symbol, test_order_->instrument_symbol);
-            EXPECT_EQ(order->side, test_order_->side);
-            EXPECT_EQ(order->type, test_order_->type);
-            EXPECT_EQ(order->quantity, test_order_->quantity);
-            EXPECT_EQ(order->status, test_order_->status);
-            EXPECT_EQ(order->filled_quantity, test_order_->filled_quantity);
+            EXPECT_EQ(order->get_instrument_symbol(), test_order_->get_instrument_symbol());
+            EXPECT_EQ(order->get_side(), test_order_->get_side());
+            EXPECT_EQ(order->get_type(), test_order_->get_type());
+            EXPECT_EQ(order->get_quantity(), test_order_->get_quantity());
+            EXPECT_EQ(order->get_status(), test_order_->get_status());
+            EXPECT_EQ(order->get_filled_quantity(), test_order_->get_filled_quantity());
             break;
         }
     }
@@ -169,13 +141,13 @@ TEST_F(DataPersistenceTest, TradePersistence) {
 
     bool found_trade = false;
     for (const auto& trade : loaded_trades) {
-        if (trade->trade_id == test_trade_->trade_id) {
+        if (trade->get_trade_id() == test_trade_->get_trade_id()) {
             found_trade = true;
-            EXPECT_EQ(trade->order_id, test_trade_->order_id);
-            EXPECT_EQ(trade->instrument_symbol, test_trade_->instrument_symbol);
-            EXPECT_EQ(trade->side, test_trade_->side);
-            EXPECT_EQ(trade->quantity, test_trade_->quantity);
-            EXPECT_EQ(trade->price, test_trade_->price);
+            EXPECT_EQ(trade->get_order_id(), test_trade_->get_order_id());
+            EXPECT_EQ(trade->get_instrument_symbol(), test_trade_->get_instrument_symbol());
+            EXPECT_EQ(trade->get_side(), test_trade_->get_side());
+            EXPECT_EQ(trade->get_quantity(), test_trade_->get_quantity());
+            EXPECT_EQ(trade->get_price(), test_trade_->get_price());
             break;
         }
     }
@@ -198,12 +170,12 @@ TEST_F(DataPersistenceTest, PositionPersistence) {
 
     bool found_position = false;
     for (const auto& position : loaded_positions) {
-        if (position->instrument_symbol == test_position_->instrument_symbol) {
+        if (position->get_instrument_symbol() == test_position_->get_instrument_symbol()) {
             found_position = true;
-            EXPECT_EQ(position->quantity, test_position_->quantity);
-            EXPECT_EQ(position->average_price, test_position_->average_price);
-            EXPECT_EQ(position->realized_pnl, test_position_->realized_pnl);
-            EXPECT_EQ(position->unrealized_pnl, test_position_->unrealized_pnl);
+            EXPECT_EQ(position->get_quantity(), test_position_->get_quantity());
+            EXPECT_EQ(position->get_average_price(), test_position_->get_average_price());
+            EXPECT_EQ(position->get_realized_pnl(), test_position_->get_realized_pnl());
+            EXPECT_EQ(position->get_unrealized_pnl(), test_position_->get_unrealized_pnl());
             break;
         }
     }
@@ -218,29 +190,15 @@ TEST_F(DataPersistenceTest, MultipleRecordsPersistence) {
 
     for (int i = 0; i < 5; ++i) {
         // Create order
-        auto order = std::make_shared<Order>();
-        order->order_id = "ORDER_" + std::to_string(i);
-        order->instrument_symbol = "AAPL";
-        order->side = (i % 2 == 0) ? OrderSide::BUY : OrderSide::SELL;
-        order->type = OrderType::MARKET;
-        order->quantity = 100.0 + i * 50.0;
-        order->status = OrderStatus::FILLED;
-        order->filled_quantity = order->quantity;
-        order->remaining_quantity = 0.0;
-        order->created_time = std::chrono::system_clock::now();
-        order->last_modified = order->created_time;
+        OrderSide side = (i % 2 == 0) ? OrderSide::BUY : OrderSide::SELL;
+        double quantity = 100.0 + i * 50.0;
+        auto order = std::make_shared<Order>("ORDER_" + std::to_string(i), "AAPL", side, OrderType::MARKET, quantity, 0.0);
+        order->accept();
+        order->fill(quantity, 150.0 + i * 0.5);
         orders.push_back(order);
 
         // Create corresponding trade
-        auto trade = std::make_shared<Trade>();
-        trade->trade_id = "TRADE_" + std::to_string(i);
-        trade->order_id = order->order_id;
-        trade->instrument_symbol = "AAPL";
-        trade->side = order->side;
-        trade->quantity = order->quantity;
-        trade->price = 150.0 + i * 0.5;
-        trade->execution_time = std::chrono::system_clock::now();
-        trade->type = TradeType::FULL_FILL;
+        auto trade = std::make_shared<Trade>("TRADE_" + std::to_string(i), order->get_order_id(), "AAPL", side, quantity, 150.0 + i * 0.5, TradeType::FULL_FILL);
         trades.push_back(trade);
     }
 
@@ -299,10 +257,10 @@ TEST_F(DataPersistenceTest, DatabaseRestore) {
     ASSERT_TRUE(persistence_->backup_to_file(backup_path_.string()));
 
     // Clear the database by recreating it
-    persistence_->shutdown();
+    persistence_->close();
     std::filesystem::remove(test_db_path_);
 
-    persistence_ = std::make_shared<PersistenceService>(config_);
+    persistence_ = std::make_shared<SQLiteService>(config_->persistence.database_path);
     ASSERT_TRUE(persistence_->initialize());
 
     // Verify database is empty
@@ -328,7 +286,7 @@ TEST_F(DataPersistenceTest, DatabaseRestore) {
     // Verify specific data
     bool found_order = false;
     for (const auto& order : restored_orders) {
-        if (order->order_id == test_order_->order_id) {
+        if (order->get_order_id() == test_order_->get_order_id()) {
             found_order = true;
             break;
         }
@@ -345,19 +303,11 @@ TEST_F(DataPersistenceTest, ConcurrentWrites) {
 
     // Act - Launch concurrent write operations
     for (int t = 0; t < num_threads; ++t) {
-        threads.emplace_back([this, t, records_per_thread, &success_count]() {
-            for (int i = 0; i < records_per_thread; ++i) {
-                auto order = std::make_shared<Order>();
-                order->order_id = "ORDER_" + std::to_string(t) + "_" + std::to_string(i);
-                order->instrument_symbol = "AAPL";
-                order->side = OrderSide::BUY;
-                order->type = OrderType::MARKET;
-                order->quantity = 100.0;
-                order->status = OrderStatus::FILLED;
-                order->filled_quantity = 100.0;
-                order->remaining_quantity = 0.0;
-                order->created_time = std::chrono::system_clock::now();
-                order->last_modified = order->created_time;
+        threads.emplace_back([this, t, &success_count]() {
+            for (int i = 0; i < 10; ++i) {
+                auto order = std::make_shared<Order>("ORDER_" + std::to_string(t) + "_" + std::to_string(i), "AAPL", OrderSide::BUY, OrderType::MARKET, 100.0, 0.0);
+                order->accept();
+                order->fill(100.0, 150.0);
 
                 if (persistence_->save_order(*order)) {
                     success_count.fetch_add(1);
@@ -388,15 +338,8 @@ TEST_F(DataPersistenceTest, LargeDatasetPerformance) {
 
     // Create test trades
     for (int i = 0; i < num_records; ++i) {
-        auto trade = std::make_shared<Trade>();
-        trade->trade_id = "PERF_TRADE_" + std::to_string(i);
-        trade->order_id = "PERF_ORDER_" + std::to_string(i);
-        trade->instrument_symbol = "AAPL";
-        trade->side = (i % 2 == 0) ? OrderSide::BUY : OrderSide::SELL;
-        trade->quantity = 100.0;
-        trade->price = 150.0 + (i % 100) * 0.01;
-        trade->execution_time = std::chrono::system_clock::now();
-        trade->type = TradeType::FULL_FILL;
+        OrderSide side = (i % 2 == 0) ? OrderSide::BUY : OrderSide::SELL;
+        auto trade = std::make_shared<Trade>("PERF_TRADE_" + std::to_string(i), "PERF_ORDER_" + std::to_string(i), "AAPL", side, 100.0, 150.0 + (i % 100) * 0.01, TradeType::FULL_FILL);
         trades.push_back(trade);
     }
 
@@ -425,10 +368,10 @@ TEST_F(DataPersistenceTest, LargeDatasetPerformance) {
 
 TEST_F(DataPersistenceTest, ErrorHandling) {
     // Test behavior with invalid database path
-    auto invalid_config = std::make_shared<Config>();
-    invalid_config->set("database.path", "/invalid/path/to/database.db");
+    auto invalid_config = std::make_shared<TradingSystemConfig>();
+    invalid_config->persistence.database_path = "/invalid/path/to/database.db";
 
-    auto invalid_persistence = std::make_shared<PersistenceService>(invalid_config);
+    auto invalid_persistence = std::make_shared<SQLiteService>(invalid_config->persistence.database_path);
 
     // Should fail to initialize with invalid path
     bool init_result = invalid_persistence->initialize();
@@ -467,13 +410,12 @@ TEST_F(DataPersistenceTest, TransactionIntegrity) {
     // Verify relationships
     bool found_matching_trade = false;
     for (const auto& trade : trades) {
-        if (trade->order_id == test_order_->order_id) {
+        if (trade->get_order_id() == test_order_->get_order_id()) {
             found_matching_trade = true;
-            EXPECT_EQ(trade->instrument_symbol, test_order_->instrument_symbol);
+            EXPECT_EQ(trade->get_instrument_symbol(), test_order_->get_instrument_symbol());
             break;
         }
     }
     EXPECT_TRUE(found_matching_trade);
 }
 
-} // Anonymous namespace for tests
