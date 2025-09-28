@@ -9,6 +9,7 @@ vcpkg_installed/
 vcpkg/downloads/
 vcpkg/packages/
 vcpkg/buildtrees/
+vcpkg/
 
 # Compiler artifacts
 *.o
@@ -39,6 +40,7 @@ logs/
 *.log
 
 # Generated config
+config/
 config/generated/
 config/*.json.backup
 
@@ -58,6 +60,7 @@ config/*.json.backup
 *.clw
 *.tags
 *.vcxproj.user
+imgui.ini
 
 # OS files
 .DS_Store
