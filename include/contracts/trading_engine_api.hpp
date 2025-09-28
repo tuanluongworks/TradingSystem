@@ -19,7 +19,7 @@ class Order;
 class Trade;
 class Position;
 class Instrument;
-class MarketTick;
+struct MarketTick;
 
 // Enums (must be defined here as they're used in contracts)
 enum class OrderSide {

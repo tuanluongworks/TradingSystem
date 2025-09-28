@@ -25,8 +25,8 @@ MarketDataProvider::MarketDataProvider(const ProviderConfig& config)
         initialize_simulation();
     }
 
-    log_provider_event("MarketDataProvider initialized in " +
-                      (config_.mode == ProviderMode::SIMULATION ? "SIMULATION" : "WEBSOCKET") + " mode");
+    std::string mode_str = (config_.mode == ProviderMode::SIMULATION ? "SIMULATION" : "WEBSOCKET");
+    log_provider_event("MarketDataProvider initialized in " + mode_str + " mode");
 }
 
 MarketDataProvider::~MarketDataProvider() {
@@ -405,6 +405,7 @@ void MarketDataProvider::notify_connection_change(bool connected) {
 }
 
 double MarketDataProvider::calculate_next_price(const std::string& symbol, double current_price) {
+    (void)symbol; // Mark parameter as intentionally unused
     // Simple random walk with mean reversion
     double price_change = price_distribution_(random_generator_) * current_price;
 
@@ -446,7 +447,7 @@ bool MarketDataProvider::is_symbol_subscribed(const std::string& symbol) const {
 }
 
 void MarketDataProvider::log_provider_event(const std::string& event) const {
-    Logger::info("MarketDataProvider", event);
+    Logger::info("MarketDataProvider: " + event);
 }
 
 // MarketDataSimulator implementation

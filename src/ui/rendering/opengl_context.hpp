@@ -1,9 +1,9 @@
 #pragma once
 
 #include <GLFW/glfw3.h>
-#include <imgui/imgui.h>
-#include <imgui/backends/imgui_impl_glfw.h>
-#include <imgui/backends/imgui_impl_opengl3.h>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 
 #include <string>
 #include <memory>
@@ -50,7 +50,7 @@ public:
         float rounding = 4.0f;
     };
 
-    explicit OpenGLContext(const WindowConfig& window_config = {}, const ImGuiConfig& imgui_config = {});
+    explicit OpenGLContext(const WindowConfig& window_config, const ImGuiConfig& imgui_config);
     virtual ~OpenGLContext();
 
     // Initialization and cleanup

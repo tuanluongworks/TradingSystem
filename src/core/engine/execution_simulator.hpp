@@ -66,7 +66,7 @@ public:
     };
 
     explicit ExecutionSimulator(
-        const SimulationConfig& config = {},
+        const SimulationConfig& config,
         std::shared_ptr<IMarketDataProvider> market_data_provider = nullptr
     );
 
@@ -75,6 +75,16 @@ public:
     // Core simulation methods
     bool should_execute_order(std::shared_ptr<Order> order) const;
     bool should_reject_order(std::shared_ptr<Order> order, std::string& rejection_reason) const;
+
+    // Internal execution result structure
+    struct ExecutionResult {
+        bool should_execute;
+        bool is_partial_fill;
+        double execution_price;
+        double executed_quantity;
+        std::chrono::milliseconds latency;
+        std::string rejection_reason;
+    };
 
     // Execution simulation
     std::vector<ExecutionResult> simulate_execution(std::shared_ptr<Order> order);
@@ -107,15 +117,6 @@ public:
     void reset_statistics();
 
 private:
-    struct ExecutionResult {
-        bool should_execute;
-        bool is_partial_fill;
-        double execution_price;
-        double executed_quantity;
-        std::chrono::milliseconds latency;
-        std::string rejection_reason;
-    };
-
     // Configuration
     SimulationConfig config_;
 
@@ -269,7 +270,7 @@ public:
     explicit ExecutionBenchmark(std::shared_ptr<ExecutionSimulator> simulator);
 
     // Benchmark execution
-    void run_benchmark(const BenchmarkConfig& config = {});
+    void run_benchmark(const BenchmarkConfig& config);
 
     // Results
     struct BenchmarkResults {

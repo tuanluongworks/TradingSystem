@@ -44,7 +44,7 @@ public:
         std::vector<std::string> default_symbols = {"AAPL", "GOOGL", "MSFT", "TSLA", "AMZN"};
     };
 
-    explicit MarketDataProvider(const ProviderConfig& config = {});
+    explicit MarketDataProvider(const ProviderConfig& config);
     virtual ~MarketDataProvider();
 
     // IMarketDataProvider implementation
@@ -165,7 +165,7 @@ public:
         double volume_std = 200.0;          // Volume standard deviation
     };
 
-    explicit MarketDataSimulator(const SimulationParams& params = {});
+    explicit MarketDataSimulator(const SimulationParams& params);
 
     // Generate next price based on random walk with mean reversion
     double generate_next_price(const std::string& symbol, double current_price);

@@ -34,12 +34,12 @@ bool ExecutionSimulator::should_execute_order(std::shared_ptr<Order> order) cons
         return false;
     }
 
-    if (is_symbol_halted(order->instrument_symbol)) {
+    if (is_symbol_halted(order->get_instrument_symbol())) {
         return false;
     }
 
     // Check fill rates based on order type
-    double fill_rate = (order->type == OrderType::MARKET) ?
+    double fill_rate = (order->get_type() == OrderType::MARKET) ?
                       config_.market_order_fill_rate :
                       config_.limit_order_fill_rate;
 
@@ -69,16 +69,16 @@ bool ExecutionSimulator::should_reject_order(std::shared_ptr<Order> order, std::
         return true;
     }
 
-    if (is_symbol_halted(order->instrument_symbol)) {
+    if (is_symbol_halted(order->get_instrument_symbol())) {
         rejection_reason = "Symbol halted";
         return true;
     }
 
     // Check price validity for limit orders
-    if (order->type == OrderType::LIMIT) {
-        double market_price = get_market_price(order->instrument_symbol, order->side);
+    if (order->get_type() == OrderType::LIMIT) {
+        double market_price = get_market_price(order->get_instrument_symbol(), order->get_side());
         if (market_price > 0) {
-            double price_diff_pct = std::abs(order->price - market_price) / market_price;
+            double price_diff_pct = std::abs(order->get_price() - market_price) / market_price;
             if (price_diff_pct > 0.1) { // Reject if price is more than 10% away from market
                 rejection_reason = "Price too far from market";
                 return true;
@@ -114,7 +114,7 @@ std::vector<ExecutionSimulator::ExecutionResult> ExecutionSimulator::simulate_ex
 
     // Determine if this will be a partial fill
     bool is_partial = should_partially_fill();
-    double remaining_quantity = order->remaining_quantity;
+    double remaining_quantity = order->get_remaining_quantity();
 
     while (remaining_quantity > 0) {
         ExecutionResult result;
@@ -129,7 +129,7 @@ std::vector<ExecutionSimulator::ExecutionResult> ExecutionSimulator::simulate_ex
         }
 
         // Simulate execution price
-        double market_price = get_market_price(order->instrument_symbol, order->side);
+        double market_price = get_market_price(order->get_instrument_symbol(), order->get_side());
         result.execution_price = simulate_execution_price(order, market_price);
 
         // Simulate latency
@@ -141,7 +141,7 @@ std::vector<ExecutionSimulator::ExecutionResult> ExecutionSimulator::simulate_ex
         remaining_quantity -= result.executed_quantity;
 
         // For limit orders, only execute once
-        if (order->type == OrderType::LIMIT) {
+        if (order->get_type() == OrderType::LIMIT) {
             break;
         }
 
@@ -157,24 +157,24 @@ std::vector<ExecutionSimulator::ExecutionResult> ExecutionSimulator::simulate_ex
 double ExecutionSimulator::simulate_execution_price(std::shared_ptr<Order> order, double market_price) const {
     if (market_price <= 0) {
         // Fallback price if market data is not available
-        market_price = order->type == OrderType::LIMIT ? order->price : 100.0;
+        market_price = order->get_type() == OrderType::LIMIT ? order->get_price() : 100.0;
     }
 
     double execution_price = market_price;
 
     // For limit orders, execution price cannot be worse than limit price
-    if (order->type == OrderType::LIMIT) {
-        if (order->side == OrderSide::BUY) {
-            execution_price = std::min(market_price, order->price);
+    if (order->get_type() == OrderType::LIMIT) {
+        if (order->get_side() == OrderSide::BUY) {
+            execution_price = std::min(market_price, order->get_price());
         } else {
-            execution_price = std::max(market_price, order->price);
+            execution_price = std::max(market_price, order->get_price());
         }
     }
 
     // Apply slippage for market orders
-    if (order->type == OrderType::MARKET) {
+    if (order->get_type() == OrderType::MARKET) {
         double slippage = simulate_slippage(order, execution_price);
-        if (order->side == OrderSide::BUY) {
+        if (order->get_side() == OrderSide::BUY) {
             execution_price += slippage;
         } else {
             execution_price -= slippage;
@@ -184,7 +184,7 @@ double ExecutionSimulator::simulate_execution_price(std::shared_ptr<Order> order
     // Apply market impact if enabled
     if (config_.simulate_market_impact) {
         double impact = calculate_market_impact(order, execution_price);
-        if (order->side == OrderSide::BUY) {
+        if (order->get_side() == OrderSide::BUY) {
             execution_price += impact;
         } else {
             execution_price -= impact;
@@ -195,6 +195,7 @@ double ExecutionSimulator::simulate_execution_price(std::shared_ptr<Order> order
 }
 
 double ExecutionSimulator::simulate_slippage(std::shared_ptr<Order> order, double base_price) const {
+    (void)order; // Suppress unused parameter warning
     double slippage_bps = std::max(config_.min_slippage_bps,
                                   std::min(config_.max_slippage_bps,
                                           slippage_dist_(gen_)));
@@ -290,7 +291,7 @@ double ExecutionSimulator::calculate_partial_fill_quantity(double total_quantity
 double ExecutionSimulator::calculate_market_impact(std::shared_ptr<Order> order, double base_price) const {
     // Simple market impact model based on order size
     double impact_factor = config_.impact_factor;
-    double quantity_factor = std::log10(order->remaining_quantity / 100.0); // Log scale
+    double quantity_factor = std::log10(order->get_remaining_quantity() / 100.0); // Log scale
     double impact = base_price * impact_factor * quantity_factor * 0.001; // 0.1% per log10(quantity/100)
 
     return std::max(0.0, impact);
@@ -323,10 +324,10 @@ void ExecutionSimulator::update_execution_stats(const ExecutionResult& result) c
 
 void ExecutionSimulator::log_execution_event(const std::string& event, std::shared_ptr<Order> order) const {
     if (order) {
-        Logger::info("ExecutionSimulator", event + " - Order ID: " + order->order_id +
-                     ", Symbol: " + order->instrument_symbol);
+        Logger::info("ExecutionSimulator: " + event + " - Order ID: " + order->get_order_id() +
+                     ", Symbol: " + order->get_instrument_symbol());
     } else {
-        Logger::info("ExecutionSimulator", event);
+        Logger::info("ExecutionSimulator: " + event);
     }
 }
 
@@ -603,24 +604,23 @@ bool ExecutionBenchmark::validate_fill_rates() const {
 }
 
 std::shared_ptr<Order> ExecutionBenchmark::generate_random_order(const BenchmarkConfig& config) const {
-    auto order = std::make_shared<Order>();
-
     // Generate random order parameters
     std::uniform_real_distribution<double> quantity_dist(config.min_quantity, config.max_quantity);
     std::uniform_int_distribution<size_t> symbol_dist(0, config.symbols.size() - 1);
     std::uniform_real_distribution<double> order_type_dist(0.0, 1.0);
     std::uniform_real_distribution<double> side_dist(0.0, 1.0);
 
-    order->order_id = "BENCH_" + std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(
+    // Generate values for Order constructor
+    std::string order_id = "BENCH_" + std::to_string(std::chrono::duration_cast<std::chrono::microseconds>(
         std::chrono::system_clock::now().time_since_epoch()).count());
-    order->instrument_symbol = config.symbols[symbol_dist(gen_)];
-    order->side = (side_dist(gen_) < 0.5) ? OrderSide::BUY : OrderSide::SELL;
-    order->type = (order_type_dist(gen_) < config.market_order_ratio) ? OrderType::MARKET : OrderType::LIMIT;
-    order->quantity = quantity_dist(gen_);
-    order->remaining_quantity = order->quantity;
-    order->price = (order->type == OrderType::LIMIT) ? 100.0 : 0.0; // Fixed price for simplicity
-    order->status = OrderStatus::NEW;
-    order->created_time = std::chrono::system_clock::now();
+    std::string symbol = config.symbols[symbol_dist(gen_)];
+    OrderSide side = (side_dist(gen_) < 0.5) ? OrderSide::BUY : OrderSide::SELL;
+    OrderType type = (order_type_dist(gen_) < config.market_order_ratio) ? OrderType::MARKET : OrderType::LIMIT;
+    double quantity = quantity_dist(gen_);
+    double price = (type == OrderType::LIMIT) ? 100.0 : 0.0; // Fixed price for simplicity
+
+    // Create order using constructor
+    auto order = std::make_shared<Order>(order_id, symbol, side, type, quantity, price);
 
     return order;
 }
@@ -635,7 +635,7 @@ void ExecutionBenchmark::log_benchmark_results(const BenchmarkResults& results) 
         << ", Avg Latency: " << results.avg_execution_latency_ms << "ms"
         << ", Orders/sec: " << results.avg_orders_per_second;
 
-    Logger::info("ExecutionBenchmark", oss.str());
+    Logger::info("ExecutionBenchmark: " + oss.str());
 }
 
 } // namespace trading

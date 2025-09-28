@@ -20,16 +20,28 @@ RiskManager::RiskManager(const RiskManagementConfig& config)
     // Initialize default risk limits from config
     if (config_.enable_risk_checks) {
         // Add global limits
-        add_risk_limit(RiskLimit("", LimitType::MAX_POSITION_SIZE, config_.max_position_size, true));
-        add_risk_limit(RiskLimit("", LimitType::MAX_ORDER_SIZE, config_.max_order_size, true));
-        add_risk_limit(RiskLimit("", LimitType::MAX_LOSS_LIMIT, config_.max_daily_loss, true));
+        auto limit1 = RiskLimit(LimitType::MAX_POSITION_SIZE, config_.max_position_size);
+        limit1.set_active(true);
+        add_risk_limit(limit1);
+
+        auto limit2 = RiskLimit(LimitType::MAX_ORDER_SIZE, config_.max_order_size);
+        limit2.set_active(true);
+        add_risk_limit(limit2);
+
+        auto limit3 = RiskLimit(LimitType::MAX_LOSS_LIMIT, config_.max_daily_loss);
+        limit3.set_active(true);
+        add_risk_limit(limit3);
 
         // Add symbol-specific limits
         for (const auto& [symbol, limit] : config_.symbol_position_limits) {
-            add_risk_limit(RiskLimit(symbol, LimitType::MAX_POSITION_SIZE, limit, true));
+            auto symbol_limit = RiskLimit(symbol, LimitType::MAX_POSITION_SIZE, limit);
+            symbol_limit.set_active(true);
+            add_risk_limit(symbol_limit);
         }
         for (const auto& [symbol, limit] : config_.symbol_order_limits) {
-            add_risk_limit(RiskLimit(symbol, LimitType::MAX_ORDER_SIZE, limit, true));
+            auto order_limit = RiskLimit(symbol, LimitType::MAX_ORDER_SIZE, limit);
+            order_limit.set_active(true);
+            add_risk_limit(order_limit);
         }
     }
 
@@ -43,15 +55,27 @@ void RiskManager::update_config(const RiskManagementConfig& config) {
     // Rebuild risk limits
     risk_limits_.clear();
     if (config_.enable_risk_checks) {
-        add_risk_limit(RiskLimit("", LimitType::MAX_POSITION_SIZE, config_.max_position_size, true));
-        add_risk_limit(RiskLimit("", LimitType::MAX_ORDER_SIZE, config_.max_order_size, true));
-        add_risk_limit(RiskLimit("", LimitType::MAX_LOSS_LIMIT, config_.max_daily_loss, true));
+        auto global_pos_limit = RiskLimit(LimitType::MAX_POSITION_SIZE, config_.max_position_size);
+        global_pos_limit.set_active(true);
+        add_risk_limit(global_pos_limit);
+
+        auto global_order_limit = RiskLimit(LimitType::MAX_ORDER_SIZE, config_.max_order_size);
+        global_order_limit.set_active(true);
+        add_risk_limit(global_order_limit);
+
+        auto global_loss_limit = RiskLimit(LimitType::MAX_LOSS_LIMIT, config_.max_daily_loss);
+        global_loss_limit.set_active(true);
+        add_risk_limit(global_loss_limit);
 
         for (const auto& [symbol, limit] : config_.symbol_position_limits) {
-            add_risk_limit(RiskLimit(symbol, LimitType::MAX_POSITION_SIZE, limit, true));
+            auto symbol_limit = RiskLimit(symbol, LimitType::MAX_POSITION_SIZE, limit);
+            symbol_limit.set_active(true);
+            add_risk_limit(symbol_limit);
         }
         for (const auto& [symbol, limit] : config_.symbol_order_limits) {
-            add_risk_limit(RiskLimit(symbol, LimitType::MAX_ORDER_SIZE, limit, true));
+            auto order_limit = RiskLimit(symbol, LimitType::MAX_ORDER_SIZE, limit);
+            order_limit.set_active(true);
+            add_risk_limit(order_limit);
         }
     }
 
@@ -132,7 +156,9 @@ bool RiskManager::set_position_limit(const std::string& symbol, double max_quant
     remove_risk_limit(symbol, LimitType::MAX_POSITION_SIZE);
 
     // Add new limit
-    add_risk_limit(RiskLimit(symbol, LimitType::MAX_POSITION_SIZE, max_quantity, true));
+    auto pos_limit = RiskLimit(symbol, LimitType::MAX_POSITION_SIZE, max_quantity);
+    pos_limit.set_active(true);
+    add_risk_limit(pos_limit);
 
     // Update config
     if (symbol.empty()) {
@@ -157,7 +183,9 @@ bool RiskManager::set_order_size_limit(const std::string& symbol, double max_qua
     remove_risk_limit(symbol, LimitType::MAX_ORDER_SIZE);
 
     // Add new limit
-    add_risk_limit(RiskLimit(symbol, LimitType::MAX_ORDER_SIZE, max_quantity, true));
+    auto order_limit = RiskLimit(symbol, LimitType::MAX_ORDER_SIZE, max_quantity);
+    order_limit.set_active(true);
+    add_risk_limit(order_limit);
 
     // Update config
     if (symbol.empty()) {
@@ -182,7 +210,9 @@ bool RiskManager::set_daily_loss_limit(double max_loss) {
     remove_risk_limit("", LimitType::MAX_LOSS_LIMIT);
 
     // Add new limit
-    add_risk_limit(RiskLimit("", LimitType::MAX_LOSS_LIMIT, max_loss, true));
+    auto loss_limit = RiskLimit(LimitType::MAX_LOSS_LIMIT, max_loss);
+    loss_limit.set_active(true);
+    add_risk_limit(loss_limit);
 
     // Update config
     config_.max_daily_loss = max_loss;
@@ -557,11 +587,11 @@ void RiskManager::log_risk_violation(const std::string& reason, const OrderReque
                          " (Symbol: " + request.instrument_symbol +
                          ", Side: " + (request.side == OrderSide::BUY ? "BUY" : "SELL") +
                          ", Quantity: " + std::to_string(request.quantity) + ")";
-    TRADING_LOG_WARN(message);
+    Logger::warn("RiskManager: " + message);
 }
 
 void RiskManager::log_risk_info(const std::string& message) const {
-    TRADING_LOG_INFO("RiskManager: " + message);
+    Logger::info("RiskManager: " + message);
 }
 
 // Risk Validator implementations

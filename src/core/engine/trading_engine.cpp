@@ -3,6 +3,7 @@
 #include "../models/trade.hpp"
 #include "../models/position.hpp"
 #include "../models/instrument.hpp"
+#include "../models/market_tick.hpp"
 #include "../../utils/logging.hpp"
 #include "../../utils/exceptions.hpp"
 
@@ -47,7 +48,7 @@ bool TradingEngine::initialize() {
         if (persistence_service_) {
             auto saved_positions = persistence_service_->load_all_positions();
             for (const auto& position : saved_positions) {
-                positions_[position->instrument_symbol] = position;
+                positions_[position->get_instrument_symbol()] = position;
             }
             log_engine_event("Loaded " + std::to_string(saved_positions.size()) + " positions from persistence");
         }
@@ -105,19 +106,19 @@ std::string TradingEngine::submit_order(const OrderRequest& request) {
     if (!risk_manager_->validate_order(request)) {
         std::string reason = risk_manager_->get_rejection_reason(request);
         reject_order(order, reason);
-        return order->order_id;
+        return order->get_order_id();
     }
 
     // Accept order and add to processing queue
     accept_order(order);
 
     // Queue order for processing
-    std::string order_id = order->order_id;
+    std::string order_id = order->get_order_id();
     order_processing_queue_.push([this, order_id]() {
         auto order_iter = orders_.find(order_id);
         if (order_iter != orders_.end()) {
             auto order = order_iter->second;
-            if (order->type == OrderType::MARKET) {
+            if (order->get_type() == OrderType::MARKET) {
                 execute_market_order(order);
             } else {
                 execute_limit_order(order);
@@ -125,7 +126,7 @@ std::string TradingEngine::submit_order(const OrderRequest& request) {
         }
     });
 
-    return order->order_id;
+    return order->get_order_id();
 }
 
 bool TradingEngine::cancel_order(const std::string& order_id) {
@@ -139,16 +140,15 @@ bool TradingEngine::cancel_order(const std::string& order_id) {
     auto order = it->second;
 
     // Check if order can be canceled
-    if (order->status == OrderStatus::FILLED ||
-        order->status == OrderStatus::CANCELED ||
-        order->status == OrderStatus::REJECTED) {
+    if (order->get_status() == OrderStatus::FILLED ||
+        order->get_status() == OrderStatus::CANCELED ||
+        order->get_status() == OrderStatus::REJECTED) {
         return false;
     }
 
     // Update order status
-    OrderStatus old_status = order->status;
-    order->status = OrderStatus::CANCELED;
-    order->last_modified = std::chrono::system_clock::now();
+    OrderStatus old_status = order->get_status();
+    order->cancel();
 
     persist_order(order);
     notify_order_update(order, old_status);
@@ -168,31 +168,19 @@ bool TradingEngine::modify_order(const std::string& order_id, double new_quantit
     auto order = it->second;
 
     // Check if order can be modified
-    if (order->status != OrderStatus::ACCEPTED && order->status != OrderStatus::PARTIALLY_FILLED) {
+    if (order->get_status() != OrderStatus::ACCEPTED && order->get_status() != OrderStatus::PARTIALLY_FILLED) {
         return false;
     }
 
     // Validate new parameters
-    if (new_quantity <= 0 || (order->type == OrderType::LIMIT && new_price <= 0)) {
+    if (new_quantity <= 0 || (order->get_type() == OrderType::LIMIT && new_price <= 0)) {
         return false;
     }
 
-    // Update order
-    OrderStatus old_status = order->status;
-    order->quantity = new_quantity;
-    order->remaining_quantity = new_quantity - order->filled_quantity;
-
-    if (order->type == OrderType::LIMIT) {
-        order->price = new_price;
-    }
-
-    order->last_modified = std::chrono::system_clock::now();
-
-    persist_order(order);
-    notify_order_update(order, old_status);
-
-    log_order_event("Order modified", order);
-    return true;
+    // Note: Order modification not supported with immutable order design
+    // In a real system, this would cancel the old order and create a new one
+    log_order_event("Order modification not supported with immutable design", order);
+    return false;
 }
 
 std::shared_ptr<Order> TradingEngine::get_order(const std::string& order_id) const {
@@ -206,7 +194,7 @@ std::vector<std::shared_ptr<Order>> TradingEngine::get_working_orders() const {
     std::vector<std::shared_ptr<Order>> working_orders;
 
     for (const auto& [order_id, order] : orders_) {
-        if (OrderManager::is_working_status(order->status)) {
+        if (OrderManager::is_working_status(order->get_status())) {
             working_orders.push_back(order);
         }
     }
@@ -270,7 +258,7 @@ std::vector<std::shared_ptr<Trade>> TradingEngine::get_daily_trades() const {
 
     std::vector<std::shared_ptr<Trade>> daily_trades;
     for (const auto& trade : trades_) {
-        if (trade->execution_time >= today_start) {
+        if (trade->get_execution_time() >= today_start) {
             daily_trades.push_back(trade);
         }
     }
@@ -324,19 +312,14 @@ bool TradingEngine::validate_order_request(const OrderRequest& request) const {
 }
 
 std::shared_ptr<Order> TradingEngine::create_order(const OrderRequest& request) {
-    auto order = std::make_shared<Order>();
-
-    order->order_id = generate_order_id();
-    order->instrument_symbol = request.instrument_symbol;
-    order->side = request.side;
-    order->type = request.type;
-    order->quantity = request.quantity;
-    order->price = request.price;
-    order->status = OrderStatus::NEW;
-    order->filled_quantity = 0.0;
-    order->remaining_quantity = request.quantity;
-    order->created_time = std::chrono::system_clock::now();
-    order->last_modified = order->created_time;
+    auto order = std::make_shared<Order>(
+        generate_order_id(),
+        request.instrument_symbol,
+        request.side,
+        request.type,
+        request.quantity,
+        request.price
+    );
 
     return order;
 }
@@ -344,13 +327,12 @@ std::shared_ptr<Order> TradingEngine::create_order(const OrderRequest& request) 
 bool TradingEngine::accept_order(std::shared_ptr<Order> order) {
     std::lock_guard<std::mutex> lock(engine_mutex_);
 
-    OrderStatus old_status = order->status;
-    order->status = OrderStatus::ACCEPTED;
-    order->last_modified = std::chrono::system_clock::now();
+    OrderStatus old_status = order->get_status();
+    order->accept();
 
     // Store order
-    orders_[order->order_id] = order;
-    add_order_to_symbol_index(order->instrument_symbol, order->order_id);
+    orders_[order->get_order_id()] = order;
+    add_order_to_symbol_index(order->get_instrument_symbol(), order->get_order_id());
 
     persist_order(order);
     notify_order_update(order, old_status);
@@ -362,12 +344,10 @@ bool TradingEngine::accept_order(std::shared_ptr<Order> order) {
 bool TradingEngine::reject_order(std::shared_ptr<Order> order, const std::string& reason) {
     std::lock_guard<std::mutex> lock(engine_mutex_);
 
-    OrderStatus old_status = order->status;
-    order->status = OrderStatus::REJECTED;
-    order->rejection_reason = reason;
-    order->last_modified = std::chrono::system_clock::now();
+    OrderStatus old_status = order->get_status();
+    order->reject(reason);
 
-    orders_[order->order_id] = order;
+    orders_[order->get_order_id()] = order;
 
     persist_order(order);
     notify_order_update(order, old_status);
@@ -377,34 +357,34 @@ bool TradingEngine::reject_order(std::shared_ptr<Order> order, const std::string
 }
 
 void TradingEngine::execute_market_order(std::shared_ptr<Order> order) {
-    double market_price = get_market_price(order->instrument_symbol, order->type);
+    double market_price = get_market_price(order->get_instrument_symbol(), order->get_type());
     if (market_price <= 0) {
         reject_order(order, "No market price available");
         return;
     }
 
     // For simulation, execute immediately at market price
-    execute_order(order->order_id, order->remaining_quantity, market_price);
+    execute_order(order->get_order_id(), order->get_remaining_quantity(), market_price);
 }
 
 void TradingEngine::execute_limit_order(std::shared_ptr<Order> order) {
-    double market_price = get_market_price(order->instrument_symbol, order->type);
+    double market_price = get_market_price(order->get_instrument_symbol(), order->get_type());
     if (market_price <= 0) {
         return; // Keep order working, wait for market data
     }
 
     if (can_execute_order(order, market_price)) {
         // Execute at limit price for favorable execution
-        double execution_price = order->price;
-        execute_order(order->order_id, order->remaining_quantity, execution_price);
+        double execution_price = order->get_price();
+        execute_order(order->get_order_id(), order->get_remaining_quantity(), execution_price);
     }
 }
 
 bool TradingEngine::can_execute_order(std::shared_ptr<Order> order, double market_price) const {
-    if (order->side == OrderSide::BUY) {
-        return market_price <= order->price; // Buy when market is at or below limit
+    if (order->get_side() == OrderSide::BUY) {
+        return market_price <= order->get_price(); // Buy when market is at or below limit
     } else {
-        return market_price >= order->price; // Sell when market is at or above limit
+        return market_price >= order->get_price(); // Sell when market is at or above limit
     }
 }
 
@@ -418,29 +398,24 @@ bool TradingEngine::execute_order(const std::string& order_id, double quantity, 
 
     auto order = it->second;
 
-    if (quantity <= 0 || quantity > order->remaining_quantity) {
+    if (quantity <= 0 || quantity > order->get_remaining_quantity()) {
         return false;
     }
 
     // Determine trade type
-    TradeType trade_type = (quantity == order->remaining_quantity) ?
+    TradeType trade_type = (quantity == order->get_remaining_quantity()) ?
         TradeType::FULL_FILL : TradeType::PARTIAL_FILL;
 
     // Create trade
     auto trade = create_trade(order, quantity, price, trade_type);
 
-    // Update order status
-    OrderStatus old_status = order->status;
-    order->filled_quantity += quantity;
-    order->remaining_quantity -= quantity;
-
-    if (order->remaining_quantity == 0) {
-        order->status = OrderStatus::FILLED;
+    // Update order status using the order's API
+    OrderStatus old_status = order->get_status();
+    if (trade_type == TradeType::FULL_FILL) {
+        order->fill(quantity, price);
     } else {
-        order->status = OrderStatus::PARTIALLY_FILLED;
+        order->partial_fill(quantity, price);
     }
-
-    order->last_modified = std::chrono::system_clock::now();
 
     // Process the trade
     process_trade(trade);
@@ -458,16 +433,15 @@ std::shared_ptr<Trade> TradingEngine::create_trade(
     double price,
     TradeType type
 ) {
-    auto trade = std::make_shared<Trade>();
-
-    trade->trade_id = generate_trade_id();
-    trade->order_id = order->order_id;
-    trade->instrument_symbol = order->instrument_symbol;
-    trade->side = order->side;
-    trade->quantity = quantity;
-    trade->price = price;
-    trade->execution_time = std::chrono::system_clock::now();
-    trade->type = type;
+    auto trade = std::make_shared<Trade>(
+        generate_trade_id(),
+        order->get_order_id(),
+        order->get_instrument_symbol(),
+        order->get_side(),
+        quantity,
+        price,
+        type
+    );
 
     return trade;
 }
@@ -475,8 +449,8 @@ std::shared_ptr<Trade> TradingEngine::create_trade(
 void TradingEngine::process_trade(std::shared_ptr<Trade> trade) {
     // Store trade
     trades_.push_back(trade);
-    trades_by_order_[trade->order_id].push_back(trade);
-    trades_by_symbol_[trade->instrument_symbol].push_back(trade);
+    trades_by_order_[trade->get_order_id()].push_back(trade);
+    trades_by_symbol_[trade->get_instrument_symbol()].push_back(trade);
 
     // Update position
     update_position(trade);
@@ -485,11 +459,11 @@ void TradingEngine::process_trade(std::shared_ptr<Trade> trade) {
     persist_trade(trade);
 
     // Notify
-    notify_trade(*trade);
+    notify_trade(trade);
 }
 
 void TradingEngine::update_position(std::shared_ptr<Trade> trade) {
-    auto position = get_or_create_position(trade->instrument_symbol);
+    auto position = get_or_create_position(trade->get_instrument_symbol());
     PositionCalculator::update_position_with_trade(*position, *trade);
 
     persist_position(position);
@@ -503,13 +477,7 @@ std::shared_ptr<Position> TradingEngine::get_or_create_position(const std::strin
     }
 
     // Create new position
-    auto position = std::make_shared<Position>();
-    position->instrument_symbol = symbol;
-    position->quantity = 0.0;
-    position->average_price = 0.0;
-    position->realized_pnl = 0.0;
-    position->unrealized_pnl = 0.0;
-    position->last_updated = std::chrono::system_clock::now();
+    auto position = std::make_shared<Position>(symbol);
 
     positions_[symbol] = position;
     return position;
@@ -541,7 +509,7 @@ void TradingEngine::process_orders() {
     while (!should_stop_.load()) {
         try {
             std::function<void()> task;
-            if (order_processing_queue_.try_pop(task, std::chrono::milliseconds(100))) {
+            if (order_processing_queue_.try_pop_for(task, std::chrono::milliseconds(100))) {
                 if (task) {
                     task();
                 }
@@ -556,13 +524,13 @@ void TradingEngine::process_orders() {
 void TradingEngine::notify_order_update(std::shared_ptr<Order> order, OrderStatus old_status) {
     if (order_update_callback_) {
         ExecutionReport report;
-        report.order_id = order->order_id;
+        report.order_id = order->get_order_id();
         report.old_status = old_status;
-        report.new_status = order->status;
-        report.filled_quantity = order->filled_quantity;
-        report.remaining_quantity = order->remaining_quantity;
-        report.timestamp = order->last_modified;
-        report.rejection_reason = order->rejection_reason;
+        report.new_status = order->get_status();
+        report.filled_quantity = order->get_filled_quantity();
+        report.remaining_quantity = order->get_remaining_quantity();
+        report.timestamp = order->get_last_modified();
+        report.rejection_reason = order->get_rejection_reason();
 
         order_update_callback_(report);
     }
@@ -623,21 +591,21 @@ void TradingEngine::remove_order_from_symbol_index(const std::string& symbol, co
 
 // Logging methods
 void TradingEngine::log_order_event(const std::string& event, std::shared_ptr<Order> order) const {
-    Logger::info("TradingEngine", event + " - Order ID: " + order->order_id +
-                 ", Symbol: " + order->instrument_symbol +
-                 ", Status: " + order->get_status_string());
+    Logger::info("TradingEngine: " + event + " - Order ID: " + order->get_order_id() +
+                 ", Symbol: " + order->get_instrument_symbol() +
+                 ", Status: " + order_status_to_string(order->get_status()));
 }
 
 void TradingEngine::log_trade_event(const std::string& event, std::shared_ptr<Trade> trade) const {
-    Logger::info("TradingEngine", event + " - Trade ID: " + trade->trade_id +
-                 ", Order ID: " + trade->order_id +
-                 ", Symbol: " + trade->instrument_symbol +
-                 ", Quantity: " + std::to_string(trade->quantity) +
-                 ", Price: " + std::to_string(trade->price));
+    Logger::info("TradingEngine: " + event + " - Trade ID: " + trade->get_trade_id() +
+                 ", Order ID: " + trade->get_order_id() +
+                 ", Symbol: " + trade->get_instrument_symbol() +
+                 ", Quantity: " + std::to_string(trade->get_quantity()) +
+                 ", Price: " + std::to_string(trade->get_price()));
 }
 
 void TradingEngine::log_engine_event(const std::string& event) const {
-    Logger::info("TradingEngine", event);
+    Logger::info("TradingEngine: " + event);
 }
 
 // Statistics methods
@@ -705,57 +673,38 @@ bool OrderManager::is_terminal_status(OrderStatus status) {
 
 // PositionCalculator implementation
 void PositionCalculator::update_position_with_trade(Position& position, const Trade& trade) {
-    double trade_quantity = (trade.side == OrderSide::BUY) ? trade.quantity : -trade.quantity;
+    double trade_quantity = (trade.get_side() == OrderSide::BUY) ? trade.get_quantity() : -trade.get_quantity();
 
-    if (position.quantity == 0) {
+    if (position.get_quantity() == 0) {
         // First trade - establish position
-        position.quantity = trade_quantity;
-        position.average_price = trade.price;
-    } else if ((position.quantity > 0 && trade_quantity > 0) ||
-               (position.quantity < 0 && trade_quantity < 0)) {
+        position.add_trade(trade_quantity, trade.get_price());
+    } else if ((position.get_quantity() > 0 && trade_quantity > 0) ||
+               (position.get_quantity() < 0 && trade_quantity < 0)) {
         // Adding to existing position
-        double old_notional = position.quantity * position.average_price;
-        double new_notional = trade_quantity * trade.price;
-        double new_quantity = position.quantity + trade_quantity;
-
-        if (new_quantity != 0) {
-            position.average_price = (old_notional + new_notional) / new_quantity;
-        }
-        position.quantity = new_quantity;
+        position.add_trade(trade_quantity, trade.get_price());
     } else {
         // Reducing or reversing position
-        double closing_quantity = std::min(std::abs(trade_quantity), std::abs(position.quantity));
-        double realized_pnl = calculate_realized_pnl(position, trade);
-        position.realized_pnl += realized_pnl;
-
-        position.quantity += trade_quantity;
-
-        if (position.quantity != 0 && std::signbit(position.quantity) != std::signbit(position.quantity - trade_quantity)) {
-            // Position reversed - new average price
-            position.average_price = trade.price;
-        }
+        position.add_trade(trade_quantity, trade.get_price());
     }
-
-    position.last_updated = trade.execution_time;
 }
 
 double PositionCalculator::calculate_unrealized_pnl(const Position& position, double current_price) {
-    if (position.quantity == 0 || current_price <= 0) {
+    if (position.get_quantity() == 0 || current_price <= 0) {
         return 0.0;
     }
 
-    return position.quantity * (current_price - position.average_price);
+    return position.get_quantity() * (current_price - position.get_average_price());
 }
 
 double PositionCalculator::calculate_realized_pnl(const Position& position, const Trade& closing_trade) {
-    if (position.quantity == 0) {
+    if (position.get_quantity() == 0) {
         return 0.0;
     }
 
-    double closing_quantity = std::min(std::abs(closing_trade.quantity), std::abs(position.quantity));
-    double pnl_per_share = (closing_trade.side == OrderSide::SELL) ?
-        (closing_trade.price - position.average_price) :
-        (position.average_price - closing_trade.price);
+    double closing_quantity = std::min(std::abs(closing_trade.get_quantity()), std::abs(position.get_quantity()));
+    double pnl_per_share = (closing_trade.get_side() == OrderSide::SELL) ?
+        (closing_trade.get_price() - position.get_average_price()) :
+        (position.get_average_price() - closing_trade.get_price());
 
     return closing_quantity * pnl_per_share;
 }
