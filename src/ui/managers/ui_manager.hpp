@@ -13,6 +13,7 @@
 #include <mutex>
 #include <atomic>
 #include <chrono>
+#include <unordered_map>
 
 namespace trading::ui {
 
@@ -55,7 +56,8 @@ public:
         bool show_toolbar = true;
     };
 
-    explicit UIManager(const UIManagerConfig& config = {});
+    UIManager();
+    explicit UIManager(const UIManagerConfig& config);
     virtual ~UIManager();
 
     // IUIManager implementation
@@ -141,6 +143,13 @@ private:
     bool show_demo_window_;
     bool show_metrics_window_;
     ImGuiID dockspace_id_;
+
+    // Window visibility states
+    bool market_data_window_open_ = true;
+    bool order_entry_window_open_ = true;
+    bool positions_window_open_ = true;
+    bool trades_window_open_ = true;
+    bool status_window_open_ = true;
 
     // Internal methods
     bool initialize_opengl();

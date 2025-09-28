@@ -6,8 +6,14 @@
 namespace trading::ui {
 
 UIManager::UIManager()
-    : running_(false), market_data_window_open_(true), order_entry_window_open_(true),
-      positions_window_open_(true), trades_window_open_(true), status_window_open_(true) {}
+    : config_({}), is_running_(false), is_initialized_(false), should_close_(false),
+      connection_status_(false), show_demo_window_(false), show_metrics_window_(false),
+      dockspace_id_(0) {}
+
+UIManager::UIManager(const UIManagerConfig& config)
+    : config_(config), is_running_(false), is_initialized_(false), should_close_(false),
+      connection_status_(false), show_demo_window_(false), show_metrics_window_(false),
+      dockspace_id_(0) {}
 
 UIManager::~UIManager() {
     shutdown();
@@ -16,7 +22,8 @@ UIManager::~UIManager() {
 bool UIManager::initialize() {
     try {
         // Initialize OpenGL context
-        if (!opengl_context_.initialize(1920, 1080, "Trading System")) {
+        gl_context_ = std::make_unique<OpenGLContext>(config_.window_config, config_.imgui_config);
+        if (!gl_context_->initialize()) {
             TRADING_LOG_ERROR("Failed to initialize OpenGL context");
             return false;
         }
@@ -29,8 +36,9 @@ bool UIManager::initialize() {
         status_panel_ = std::make_unique<StatusPanel>();
 
         // Setup panel callbacks
-        setup_panel_callbacks();
+        setup_callbacks();
 
+        is_initialized_ = true;
         TRADING_LOG_INFO("UI Manager initialized successfully");
         return true;
     } catch (const std::exception& e) {
@@ -40,35 +48,36 @@ bool UIManager::initialize() {
 }
 
 void UIManager::run() {
-    if (!opengl_context_.is_valid()) {
+    if (!gl_context_ || !is_initialized_) {
         TRADING_LOG_ERROR("Cannot run UI: OpenGL context not initialized");
         return;
     }
 
-    running_ = true;
+    is_running_ = true;
     TRADING_LOG_INFO("Starting UI main loop");
 
     // Main render loop
-    while (running_ && !opengl_context_.should_close()) {
+    while (is_running_ && !should_close_) {
         // Poll events
-        opengl_context_.poll_events();
+        gl_context_->poll_events();
 
         // Start ImGui frame
-        opengl_context_.new_frame();
+        gl_context_->begin_frame();
 
         // Render UI panels
         render_panels();
 
         // End frame and swap buffers
-        opengl_context_.render();
+        gl_context_->end_frame();
     }
 
     TRADING_LOG_INFO("UI main loop ended");
 }
 
 void UIManager::shutdown() {
-    if (running_) {
-        running_ = false;
+    if (is_running_) {
+        is_running_ = false;
+        should_close_ = true;
         TRADING_LOG_INFO("Shutting down UI Manager");
     }
 
@@ -80,7 +89,12 @@ void UIManager::shutdown() {
     status_panel_.reset();
 
     // Cleanup OpenGL context
-    opengl_context_.cleanup();
+    if (gl_context_) {
+        gl_context_->shutdown();
+        gl_context_.reset();
+    }
+
+    is_initialized_ = false;
 }
 
 void UIManager::show_market_data_window(bool show) {
@@ -138,7 +152,8 @@ void UIManager::update_trades(const std::vector<TradeRow>& trades) {
 
 void UIManager::update_connection_status(bool connected, const std::string& status) {
     std::lock_guard<std::mutex> lock(data_mutex_);
-    connection_status_.market_data_connected = connected;
+    connection_status_ = connected;
+    connection_status_text_ = status;
 
     if (status_panel_) {
         status_panel_->update_connection_status(connected, status);
@@ -163,7 +178,7 @@ void UIManager::set_symbol_unsubscribe_callback(std::function<void(const std::st
 
 void UIManager::render_panels() {
     // Create main dock space
-    create_dock_space();
+    render_dockspace();
 
     // Render individual panels if they're open
     if (market_data_window_open_ && market_data_panel_) {
@@ -202,31 +217,9 @@ void UIManager::render_panels() {
     }
 }
 
-void UIManager::create_dock_space() {
-    // Create a full-screen window for docking
-    ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-    const ImGuiViewport* viewport = ImGui::GetMainViewport();
-    ImGui::SetNextWindowPos(viewport->Pos);
-    ImGui::SetNextWindowSize(viewport->Size);
-    ImGui::SetNextWindowViewport(viewport->ID);
-
-    window_flags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse;
-    window_flags |= ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-    window_flags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-    ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-
-    ImGui::Begin("DockSpace", nullptr, window_flags);
-    ImGui::PopStyleVar(3);
-
-    // Create dock space
-    ImGuiID dockspace_id = ImGui::GetID("MainDockSpace");
-    ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), ImGuiDockNodeFlags_None);
-
-    // Menu bar
-    if (ImGui::BeginMenuBar()) {
+void UIManager::render_dockspace() {
+    // Simple menu bar without docking
+    if (ImGui::BeginMainMenuBar()) {
         if (ImGui::BeginMenu("View")) {
             ImGui::MenuItem("Market Data", nullptr, &market_data_window_open_);
             ImGui::MenuItem("Order Entry", nullptr, &order_entry_window_open_);
@@ -235,13 +228,15 @@ void UIManager::create_dock_space() {
             ImGui::MenuItem("Status", nullptr, &status_window_open_);
             ImGui::EndMenu();
         }
-        ImGui::EndMenuBar();
+        if (ImGui::BeginMenu("Help")) {
+            ImGui::MenuItem("About", nullptr, nullptr);
+            ImGui::EndMenu();
+        }
+        ImGui::EndMainMenuBar();
     }
-
-    ImGui::End();
 }
 
-void UIManager::setup_panel_callbacks() {
+void UIManager::setup_callbacks() {
     // Order Entry Panel callbacks
     if (order_entry_panel_) {
         order_entry_panel_->set_submit_callback([this](const OrderFormData& form_data) {
@@ -283,6 +278,46 @@ void UIManager::setup_panel_callbacks() {
             }
         });
     }
+}
+
+// Additional public interface methods
+void UIManager::set_window_title(const std::string& title) {
+    if (gl_context_) {
+        gl_context_->set_window_title(title);
+    }
+}
+
+void UIManager::load_layout(const std::string& layout_file) {
+    // TODO: Implement layout loading
+    (void)layout_file; // Suppress unused parameter warning
+}
+
+void UIManager::save_layout(const std::string& layout_file) {
+    // TODO: Implement layout saving
+    (void)layout_file; // Suppress unused parameter warning
+}
+
+void UIManager::set_config(const UIManagerConfig& config) {
+    config_ = config;
+}
+
+const UIManager::UIManagerConfig& UIManager::get_config() const {
+    return config_;
+}
+
+bool UIManager::is_running() const {
+    return is_running_;
+}
+
+bool UIManager::is_initialized() const {
+    return is_initialized_;
+}
+
+OpenGLContext::PerformanceStats UIManager::get_performance_stats() const {
+    if (gl_context_) {
+        return gl_context_->get_performance_stats();
+    }
+    return {};
 }
 
 } // namespace trading::ui

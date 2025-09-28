@@ -4,8 +4,8 @@
 #include <chrono>
 #include <imgui.h>
 
-// Need to include the contract from the specs directory
-#include "../../../specs/001-c-trading-system/contracts/ui_interface.hpp"
+// Include the contract from the include directory
+#include "contracts/ui_interface.hpp"
 
 namespace trading::ui {
 
@@ -48,6 +48,7 @@ public:
     void set_market_data_connected(bool connected);
     void set_database_available(bool available);
     void set_connection_status(const std::string& status);
+    void update_connection_status(bool connected, const std::string& status);
 
     // Performance updates
     void set_ui_fps(double fps);

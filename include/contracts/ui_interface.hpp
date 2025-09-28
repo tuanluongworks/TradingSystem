@@ -205,4 +205,41 @@ struct OrderFormData {
     void clear();
 };
 
+/**
+ * Status Information Structure
+ * Holds system status information for display
+ */
+struct StatusInfo {
+    // Connection status
+    bool market_data_connected = false;
+    bool trading_engine_connected = false;
+    bool database_connected = false;
+    bool database_available = false;
+    std::string connection_status_text = "Disconnected";
+
+    // System metrics
+    float fps = 0.0f;
+    float cpu_usage = 0.0f;
+    float memory_usage_mb = 0.0f;
+
+    // Trading metrics
+    int total_orders = 0;
+    int active_orders = 0;
+    int total_positions = 0;
+    int open_positions = 0;
+    double total_pnl = 0.0;
+    double daily_pnl = 0.0;
+
+    // Timestamps
+    std::chrono::system_clock::time_point last_market_data_update;
+    std::chrono::system_clock::time_point last_heartbeat;
+
+    // Validation
+    bool is_stale() const {
+        auto now = std::chrono::system_clock::now();
+        auto staleness_threshold = std::chrono::seconds(30);
+        return (now - last_heartbeat) > staleness_threshold;
+    }
+};
+
 } // namespace trading::ui

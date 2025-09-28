@@ -3,6 +3,7 @@
 #include <spdlog/spdlog.h>
 #include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
+#include <spdlog/fmt/fmt.h>
 #include <memory>
 #include <string>
 
@@ -77,9 +78,47 @@ private:
 #define LOG_ERROR(msg) trading::Logger::error(msg)
 #define LOG_CRITICAL(msg) trading::Logger::critical(msg)
 
+// Domain-specific logging macros
 #define LOG_ORDER(order_id, action, details) trading::Logger::log_order(order_id, action, details)
 #define LOG_TRADE(trade_id, order_id, details) trading::Logger::log_trade(trade_id, order_id, details)
 #define LOG_MARKET_DATA(symbol, data) trading::Logger::log_market_data(symbol, data)
 #define LOG_RISK_EVENT(event, details) trading::Logger::log_risk_event(event, details)
+
+// Alternative macros for backward compatibility using spdlog directly
+#define TRADING_LOG_TRACE(...) do { \
+    if (auto logger = trading::Logger::get_console_logger()) { \
+        logger->trace(__VA_ARGS__); \
+    } \
+} while(0)
+
+#define TRADING_LOG_DEBUG(...) do { \
+    if (auto logger = trading::Logger::get_console_logger()) { \
+        logger->debug(__VA_ARGS__); \
+    } \
+} while(0)
+
+#define TRADING_LOG_INFO(...) do { \
+    if (auto logger = trading::Logger::get_console_logger()) { \
+        logger->info(__VA_ARGS__); \
+    } \
+} while(0)
+
+#define TRADING_LOG_WARN(...) do { \
+    if (auto logger = trading::Logger::get_console_logger()) { \
+        logger->warn(__VA_ARGS__); \
+    } \
+} while(0)
+
+#define TRADING_LOG_ERROR(...) do { \
+    if (auto logger = trading::Logger::get_console_logger()) { \
+        logger->error(__VA_ARGS__); \
+    } \
+} while(0)
+
+#define TRADING_LOG_CRITICAL(...) do { \
+    if (auto logger = trading::Logger::get_console_logger()) { \
+        logger->critical(__VA_ARGS__); \
+    } \
+} while(0)
 
 } // namespace trading

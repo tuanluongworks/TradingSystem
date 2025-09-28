@@ -32,21 +32,21 @@ void StatusPanel::render() {
         render_connection_status();
 
         ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::Text("|");
         ImGui::SameLine();
 
         // Trading status
         render_trading_status();
 
         ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::Text("|");
         ImGui::SameLine();
 
         // Performance metrics
         render_performance_metrics();
 
         ImGui::SameLine();
-        ImGui::SeparatorEx(ImGuiSeparatorFlags_Vertical);
+        ImGui::Text("|");
         ImGui::SameLine();
 
         // System time
@@ -177,7 +177,7 @@ void StatusPanel::render_system_time() {
         auto age = std::chrono::duration_cast<std::chrono::seconds>(now - last_heartbeat_).count();
         if (age > 5) { // Show warning if no heartbeat for 5+ seconds
             ImGui::SameLine();
-            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "| Stale: %lds", age);
+            ImGui::TextColored(ImVec4(1.0f, 1.0f, 0.0f, 1.0f), "| Stale: %llds", static_cast<long long>(age));
         }
     }
 }
@@ -289,6 +289,12 @@ void StatusPanel::update_performance_metrics() {
     cpu_usage_ = 0.0;
     memory_usage_mb_ = 0.0;
 #endif
+}
+
+void StatusPanel::update_connection_status(bool connected, const std::string& status) {
+    status_info_.market_data_connected = connected;
+    status_info_.connection_status_text = status;
+    status_info_.last_heartbeat = std::chrono::system_clock::now();
 }
 
 } // namespace trading::ui

@@ -197,7 +197,12 @@ void PositionsPanel::render_summary() {
         ImU32 unrealized_color = get_pnl_color(total_unrealized_pnl);
         ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(unrealized_color),
                          "Unrealized: %s", format_currency(total_unrealized_pnl).c_str());
-        ImGui::SameLine(350);
+        ImGui::SameLine(250);
+
+        ImU32 realized_color = get_pnl_color(total_realized_pnl);
+        ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(realized_color),
+                         "Realized: %s", format_currency(total_realized_pnl).c_str());
+        ImGui::SameLine(400);
 
         ImU32 total_color = get_pnl_color(total_pnl);
         ImGui::TextColored(ImGui::ColorConvertU32ToFloat4(total_color),
